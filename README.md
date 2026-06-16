@@ -10,12 +10,14 @@ SDL framebuffer, it grabs the real display each tick.
 
 ## Layout
 
-- `screencap_bridge.m` — Objective-C bridge: a continuous ScreenCaptureKit `SCStream` (CGDisplayCreateImage
-  is obsoleted on macOS 15+, so SCK is the only supported path). The stream pushes frames on a background
-  queue into a single latest-frame staging buffer behind a lock; `screencap_grab()` is then a cheap memcpy
-  of that frame, so capture runs at ~45 fps instead of the ~10 fps a per-frame screenshot would allow. It
-  also computes per-frame motion energy (for motion-adaptive sampling) and captures system audio (RMS
-  loudness + spike detection), all on the same monotonic clock.
+- `screencap.elisa` — ScreenCaptureKit capture driven **entirely from Elisa** (no Objective-C source file).
+  ScreenCaptureKit is an Obj-C framework, so this drives the Obj-C runtime over plain-C FFI: `objc_msgSend`
+  (address taken via `dlsym`, invoked per-call-site with `call_as` for the exact arm64 prototype),
+  `objc_allocateClassPair`/`class_addMethod` to build the `SCStreamOutput` delegate with an Elisa `@c_abi`
+  function as its IMP, and hand-assembled global blocks for the async completion handlers. It runs a
+  continuous `SCStream`, stages the latest frame behind an `os_unfair_lock`, computes per-frame motion
+  energy and system-audio RMS, and exposes the `screencap_*` API. `screencap_grab()` is a cheap memcpy, so
+  capture runs at ~45 fps. (CGDisplayCreateImage is obsoleted on macOS 15+, so SCK is the only path.)
 - `comic_capture.elisa` — project-agnostic comic pipeline (downscale/blit, annotation, hand-rolled PNG
   encoder, CSV). Shared verbatim with the Wolf3D recorder.
 - `screen_recorder.elisa` — the `main` loop: grab → `comic_capture_rgb` → pace with `usleep` → flush.
@@ -69,6 +71,16 @@ Examples:
 
 Requires the **Screen Recording** permission (System Settings → Privacy & Security → Screen Recording);
 ScreenCaptureKit raises the prompt on first run.
+
+## Note on the Objective-C-from-Elisa port
+
+The whole bridge is Elisa — there is no `.m` file. This exercises the Obj-C runtime via FFI (see
+`screencap.elisa`). It also drove one compiler fix in Elisa-core: aggregates larger than 16 bytes passed
+or returned **by value** across the C ABI (e.g. `CMTime`, 24 bytes) now use the platform memory class
+(`sret` returns; arm64 indirect-pointer args / x86-64 `byval`). This applies only at the C-ABI boundary —
+`@c_abi` functions and `call_as` indirect calls — so Elisa's internal calling convention is unchanged.
+Calling a plain `extern` that returns such a struct by value is still unsupported; construct the struct in
+Elisa or go through `call_as` (as this code does for `setMinimumFrameInterval:`).
 
 ## Resolution limits
 

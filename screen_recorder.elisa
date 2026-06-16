@@ -28,20 +28,8 @@ include "/Users/torarinvikbjarko/Documents/Coding Projects/Elisa Projects/Comic_
 #   screen_rec /tmp/p 0 10 10 760 428  -> ~8K pages at ~45fps.
 # Requires the "Screen Recording" permission (System Settings -> Privacy & Security -> Screen Recording).
 
-# ---- the ScreenCaptureKit + signal bridge (see screencap_bridge.m) -----------------------------------
-extern screencap_start() -> int
-extern screencap_wait_first_frame() -> int
-extern screencap_grab(dst: u32&, capacity_px: i32) -> int
-extern screencap_w() -> int
-extern screencap_h() -> int
-extern screencap_log_dims() -> void
-extern screencap_stop() -> void
-extern screencap_install_sigint() -> void
-extern screencap_should_stop() -> int
-extern screencap_wait_keyframe(min_ms: i32, max_ms: i32, thresh: i32) -> int
-extern screencap_now_ms() -> i64
-extern screencap_audio_level() -> int
-extern screencap_set_audio_trigger(thresh: i32) -> void
+# ---- ScreenCaptureKit capture, driven entirely from Elisa via the Objective-C runtime (no .m file) --
+include "/Users/torarinvikbjarko/Documents/Coding Projects/Elisa Projects/Comic_book_video/screencap.elisa"
 
 # Motion-adaptive keyframe tuning (used when delay_ms < 0). A panel is captured when accumulated
 # motion since the last panel crosses KF_THRESH (but never closer together than KF_MIN_MS, so a
@@ -55,11 +43,10 @@ global KF_AUDIO_THRESH: i32 = 1500
 global AUDIO_LABEL_LOUD: i32 = 180             # RMS at capture time above this -> panel tagged "loud"
 global AUDIO_LABEL_SND: i32 = 70               # ...above this -> tagged "snd"
 
-# ---- libc: file IO used by comic_capture.elisa, plus timing/args for the loop ------------------------
+# ---- libc: file IO used by comic_capture.elisa, plus args for the loop (usleep comes from screencap) -
 extern fopen(path: u8&, mode: u8&) -> void&?
 extern fwrite(ptr: u8&, size: usize, nmemb: usize, stream: void&) -> usize
 extern fclose(stream: void&) -> int
-extern usleep(usec: u32) -> int
 extern atoi(s: u8&) -> int
 extern printf(fmt: u8&) -> int
 
