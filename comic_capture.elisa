@@ -43,7 +43,7 @@ global CC_FONT: array[u8, 50] = [
     5u8,5u8,7u8,1u8,1u8,   7u8,4u8,7u8,1u8,7u8,   7u8,4u8,7u8,5u8,7u8,   7u8,1u8,2u8,2u8,2u8,
     7u8,5u8,7u8,5u8,7u8,   7u8,5u8,7u8,1u8,7u8]
 
-struct ComicCapture layout c:
+struct ComicCapture layout(c):
     cols: mutable i32
     rows: mutable i32
     panel_w: mutable i32
@@ -72,7 +72,7 @@ struct ComicCapture layout c:
 
 # Streaming PNG writer: buffers output and maintains the running IDAT CRC so we never hold the whole
 # encoded file in memory (only the raw RGB page above).
-struct PngW layout c:
+struct PngW layout(c):
     f: mutable void&?
     crc: mutable u32
     buf: mutable array[u8, 16384]

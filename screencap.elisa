@@ -31,7 +31,7 @@ extern signal(sig: int, handler: void&?) -> void&?
 extern os_unfair_lock_lock(lock: void&) -> void
 extern os_unfair_lock_unlock(lock: void&) -> void
 
-struct Timespec layout c:
+struct Timespec layout(c):
     tv_sec: mutable i64
     tv_nsec: mutable i64
 extern clock_gettime(clk: int, ts: void&) -> int
@@ -52,27 +52,27 @@ extern CGDisplayModeGetPixelWidth(mode: void&?) -> usize
 extern CGDisplayModeGetPixelHeight(mode: void&?) -> usize
 extern CGDisplayModeRelease(mode: void&?) -> void
 
-struct CMTime layout c:
+struct CMTime layout(c):
     value: mutable i64
     timescale: mutable i32
     flags: mutable u32
     epoch: mutable i64
 
-struct AudioBuffer layout c:
+struct AudioBuffer layout(c):
     mNumberChannels: mutable u32
     mDataByteSize: mutable u32
     mData: mutable void&?
-struct AudioBufferList2 layout c:        # AudioBufferList with room for 2 channel buffers
+struct AudioBufferList2 layout(c):        # AudioBufferList with room for 2 channel buffers
     mNumberBuffers: mutable u32
     pad: mutable u32
     buf0: mutable AudioBuffer
     buf1: mutable AudioBuffer
 
-struct BlockDescriptor layout c:
+struct BlockDescriptor layout(c):
     reserved: mutable u64
     size: mutable u64
     signature: mutable void&?
-struct BlockLiteral layout c:
+struct BlockLiteral layout(c):
     isa: mutable void&?
     flags: mutable i32
     reserved: mutable i32
@@ -181,7 +181,7 @@ def screencap_should_stop() -> int:
     return g_stop_flag
 
 # ---- SIGINT ----------------------------------------------------------------------------------------
-@c_abi(c)
+@callconv(c)
 def sc_sigint_handler(sig: int) -> void:
     g_stop_flag <- 1
 def screencap_install_sigint() -> void:
@@ -191,14 +191,14 @@ def screencap_install_sigint() -> void:
     _ = signal(2, hp)                                # SIGINT
 
 # ---- async completion handlers (block invokes) -----------------------------------------------------
-@c_abi(c)
+@callconv(c)
 def sc_content_cb(blk: void&?, content: void&?, err: void&?) -> void:
     if content != null:
         displays: void&? = m0(content, sel("displays"))
         d: void&? = m_idx(displays, sel("objectAtIndex:"), 0.usize())
         g_display <- m0(d, sel("retain"))
     g_content_done <- 1
-@c_abi(c)
+@callconv(c)
 def sc_start_cb(blk: void&?, err: void&?) -> void:
     g_start_done <- 1
 
@@ -304,7 +304,7 @@ def process_video(sb: void&?) -> void:
     _ = CVPixelBufferUnlockBaseAddress(px, 1u64)
 
 # ---- the SCStreamOutput delegate IMP: stream:didOutputSampleBuffer:ofType: -------------------------
-@c_abi(c)
+@callconv(c)
 def sc_sample_imp(self: void&?, cmd: void&?, stream: void&?, sb: void&?, kind: i64) -> void:
     if sb == null:
         return
