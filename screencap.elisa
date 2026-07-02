@@ -112,43 +112,43 @@ def sel(name: cstr) -> void&?:
     return sel_registerName(name.cast[u8&])
 def m0(r: void&?, s: void&?) -> void&?:
     trusted Unsafe.IndirectCall:
-        return g_msgSend.call_as[func(void&?, void&?) -> void&?](r, s)
+        return g_msgSend.call_as[fn(void&?, void&?) -> void&?](r, s)
 def m2(r: void&?, s: void&?, a: void&?, b: void&?) -> void&?:
     trusted Unsafe.IndirectCall:
-        return g_msgSend.call_as[func(void&?, void&?, void&?, void&?) -> void&?](r, s, a, b)
+        return g_msgSend.call_as[fn(void&?, void&?, void&?, void&?) -> void&?](r, s, a, b)
 def m3(r: void&?, s: void&?, a: void&?, b: void&?, c: void&?) -> void&?:
     trusted Unsafe.IndirectCall:
-        return g_msgSend.call_as[func(void&?, void&?, void&?, void&?, void&?) -> void&?](r, s, a, b, c)
+        return g_msgSend.call_as[fn(void&?, void&?, void&?, void&?, void&?) -> void&?](r, s, a, b, c)
 def mi(r: void&?, s: void&?) -> i64:
     trusted Unsafe.IndirectCall:
-        return g_msgSend.call_as[func(void&?, void&?) -> i64](r, s)
+        return g_msgSend.call_as[fn(void&?, void&?) -> i64](r, s)
 def m_u32(r: void&?, s: void&?) -> u32:
     trusted Unsafe.IndirectCall:
-        return g_msgSend.call_as[func(void&?, void&?) -> u32](r, s)
+        return g_msgSend.call_as[fn(void&?, void&?) -> u32](r, s)
 def m_idx(r: void&?, s: void&?, v: usize) -> void&?:
     trusted Unsafe.IndirectCall:
-        return g_msgSend.call_as[func(void&?, void&?, usize) -> void&?](r, s, v)
+        return g_msgSend.call_as[fn(void&?, void&?, usize) -> void&?](r, s, v)
 def m_setu(r: void&?, s: void&?, v: usize) -> void:
     trusted Unsafe.IndirectCall:
-        g_msgSend.call_as[func(void&?, void&?, usize) -> void](r, s, v)
+        g_msgSend.call_as[fn(void&?, void&?, usize) -> void](r, s, v)
 def m_setu32(r: void&?, s: void&?, v: u32) -> void:
     trusted Unsafe.IndirectCall:
-        g_msgSend.call_as[func(void&?, void&?, u32) -> void](r, s, v)
+        g_msgSend.call_as[fn(void&?, void&?, u32) -> void](r, s, v)
 def m_seti(r: void&?, s: void&?, v: i64) -> void:
     trusted Unsafe.IndirectCall:
-        g_msgSend.call_as[func(void&?, void&?, i64) -> void](r, s, v)
+        g_msgSend.call_as[fn(void&?, void&?, i64) -> void](r, s, v)
 def m_setb(r: void&?, s: void&?, v: u8) -> void:
     trusted Unsafe.IndirectCall:
-        g_msgSend.call_as[func(void&?, void&?, u8) -> void](r, s, v)
+        g_msgSend.call_as[fn(void&?, void&?, u8) -> void](r, s, v)
 def m_setcmtime(r: void&?, s: void&?, v: CMTime) -> void:
     trusted Unsafe.IndirectCall:
-        g_msgSend.call_as[func(void&?, void&?, CMTime) -> void](r, s, v)
+        g_msgSend.call_as[fn(void&?, void&?, CMTime) -> void](r, s, v)
 def m_addout(r: void&?, s: void&?, a: void&?, t: i64, q: void&?, e: void&?) -> u8:
     trusted Unsafe.IndirectCall:
-        return g_msgSend.call_as[func(void&?, void&?, void&?, i64, void&?, void&?) -> u8](r, s, a, t, q, e)
+        return g_msgSend.call_as[fn(void&?, void&?, void&?, i64, void&?, void&?) -> u8](r, s, a, t, q, e)
 def m_blk(r: void&?, s: void&?, b: void&?) -> void:
     trusted Unsafe.IndirectCall:
-        g_msgSend.call_as[func(void&?, void&?, void&?) -> void](r, s, b)
+        g_msgSend.call_as[fn(void&?, void&?, void&?) -> void](r, s, b)
 
 def iabs(x: i32) -> i32:
     if x < 0:
