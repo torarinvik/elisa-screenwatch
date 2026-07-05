@@ -1,4 +1,4 @@
-include "/Users/torarinvikbjarko/Documents/Coding Projects/Elisa Projects/Comic_book_video/comic_capture.elisa"
+include "./comic_capture.elisa"
 
 # screen_recorder.elisa — record the live macOS desktop into "comic book" contact sheets.
 #
@@ -29,7 +29,7 @@ include "/Users/torarinvikbjarko/Documents/Coding Projects/Elisa Projects/Comic_
 # Requires the "Screen Recording" permission (System Settings -> Privacy & Security -> Screen Recording).
 
 # ---- ScreenCaptureKit capture, driven entirely from Elisa via the Objective-C runtime (no .m file) --
-include "/Users/torarinvikbjarko/Documents/Coding Projects/Elisa Projects/Comic_book_video/screencap.elisa"
+include "./screencap.elisa"
 
 # Motion-adaptive keyframe tuning (used when delay_ms < 0). A panel is captured when accumulated
 # motion since the last panel crosses KF_THRESH (but never closer together than KF_MIN_MS, so a
