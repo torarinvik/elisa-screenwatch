@@ -1,21 +1,30 @@
-{"type":"phase","t0":0,"t1":2000,"label":"counter shows 0","activity":"typing"}
-{"type":"phase","t0":2000,"t1":4000,"label":"counter shows 1","activity":"typing"}
-{"type":"phase","t0":4000,"t1":6000,"label":"counter shows 2","activity":"typing"}
-{"type":"phase","t0":6000,"t1":8000,"label":"counter shows 3","activity":"typing"}
-{"type":"phase","t0":8000,"t1":10000,"label":"counter shows 4","activity":"typing"}
-{"type":"phase","t0":10000,"t1":12000,"label":"counter shows 5","activity":"typing"}
-{"type":"phase","t0":12000,"t1":14000,"label":"counter shows 6","activity":"typing"}
-{"type":"phase","t0":14000,"t1":16000,"label":"counter shows 7","activity":"typing"}
-{"type":"phase","t0":16000,"t1":18000,"label":"counter shows 8","activity":"typing"}
-{"type":"phase","t0":18000,"t1":20000,"label":"counter shows 9","activity":"typing"}
+{"type":"phase","t0":0,"t1":2000,"label":"counter shows 0","activity":"still"}
+{"type":"phase","t0":2000,"t1":4000,"label":"counter shows 1","activity":"still"}
+{"type":"phase","t0":4000,"t1":6000,"label":"counter shows 2","activity":"still"}
+{"type":"phase","t0":6000,"t1":8000,"label":"counter shows 3","activity":"still"}
+{"type":"phase","t0":8000,"t1":10000,"label":"counter shows 4","activity":"still"}
+{"type":"phase","t0":10000,"t1":12000,"label":"counter shows 5","activity":"still"}
+{"type":"phase","t0":12000,"t1":14000,"label":"counter shows 6","activity":"still"}
+{"type":"phase","t0":14000,"t1":16000,"label":"counter shows 7","activity":"still"}
+{"type":"phase","t0":16000,"t1":18000,"label":"counter shows 8","activity":"still"}
+{"type":"phase","t0":18000,"t1":20000,"label":"counter shows 9","activity":"still"}
 {"type":"fact","t0":0,"t1":2000,"key":"counter","value":"0"}
 {"type":"fact","t0":2000,"t1":4000,"key":"counter","value":"1"}
+{"type":"fact","t0":4000,"t1":6000,"key":"counter","value":"2"}
 {"type":"fact","t0":6000,"t1":8000,"key":"counter","value":"3"}
+{"type":"fact","t0":8000,"t1":10000,"key":"counter","value":"4"}
 {"type":"fact","t0":10000,"t1":12000,"key":"counter","value":"5"}
 {"type":"fact","t0":12000,"t1":14000,"key":"counter","value":"6"}
+{"type":"fact","t0":14000,"t1":16000,"key":"counter","value":"7"}
+{"type":"fact","t0":16000,"t1":18000,"key":"counter","value":"8"}
 {"type":"fact","t0":18000,"t1":20000,"key":"counter","value":"9"}
+{"type":"event","t":0,"id":"e0","desc":"counter appears showing 0","object":"o1"}
 {"type":"event","t":2000,"id":"e1","desc":"counter incremented to 1","object":"o1"}
+{"type":"event","t":4000,"id":"e2","desc":"counter incremented to 2","object":"o1"}
 {"type":"event","t":6000,"id":"e3","desc":"counter incremented to 3","object":"o1"}
+{"type":"event","t":8000,"id":"e4","desc":"counter incremented to 4","object":"o1"}
 {"type":"event","t":10000,"id":"e5","desc":"counter incremented to 5","object":"o1"}
+{"type":"event","t":12000,"id":"e6","desc":"counter incremented to 6","object":"o1"}
 {"type":"event","t":14000,"id":"e7","desc":"counter incremented to 7","object":"o1"}
+{"type":"event","t":16000,"id":"e8","desc":"counter incremented to 8","object":"o1"}
 {"type":"event","t":18000,"id":"e9","desc":"counter incremented to 9","object":"o1"}

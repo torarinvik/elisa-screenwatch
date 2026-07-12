@@ -1,0 +1,140 @@
+# scenegen.elisa — deterministic synthetic scene source for the eval battery (eval/scenarios.md).
+#
+# Renders a scripted scene into SCREEN_GRAB and drives the SAME real encoder as the live recorder
+# (encoder.elisa), so a fixture is byte-for-byte the stream + Tier-A archive a watcher sees in
+# production — but reproducible, timing-exact, and with no screen-recording permission. This is how
+# the CONTROLLED scenarios (counter, brief object, occlusion, invisible-event) get produced with
+# exact ground truth; a real app can't hit the timing.
+#
+# Time is synthetic: frame f is stamped t_ms = f * (1000/fps), independent of wall clock, so two
+# runs of the same scene are identical. Scene timings here MUST match the authored ground truth in
+# eval/scenarios/<name>/{truth,probes}.jsonl.
+#
+# USAGE: scenegen <scene> [out_dir] [width] [fps] [dur_ms]
+#   scene    one of: counter        (more scenes added alongside their authored truth)
+#   out_dir  fixture directory                       (default /tmp/scenegen_out)
+#   width    downscaled grid width                   (default 192)
+#   fps      frames per second                       (default 10)
+#   dur_ms   total scene duration in ms              (default 20000)
+
+include "./encoder.elisa"
+
+# synthetic source resolution (fits GRAB_CAP; big enough for a legible grid at width 192)
+global mutable SG_W: i32 = 640
+global mutable SG_H: i32 = 400
+
+# 5x7 bitmap font, digits 0-9, row-major (10*7 rows); low 5 bits per row, bit4 = leftmost column.
+global mutable FONT: array[u8, 70] = [
+    14, 17, 19, 21, 25, 17, 14,     # 0
+     4, 12,  4,  4,  4,  4, 14,     # 1
+    14, 17,  1,  2,  4,  8, 31,     # 2
+    31,  2,  4,  2,  1, 17, 14,     # 3
+     2,  6, 10, 18, 31,  2,  2,     # 4
+    31, 16, 30,  1,  1, 17, 14,     # 5
+     6,  8, 16, 30, 17, 17, 14,     # 6
+    31,  1,  2,  4,  8,  8,  8,     # 7
+    14, 17, 17, 14, 17, 17, 14,     # 8
+    14, 17, 17, 15,  1,  2, 12,     # 9
+]
+
+def sg_streq(a: u8&, b: cstr) -> bool:
+    i: mutable i32 = 0
+    while a[i.usize()] != 0 and b[i.usize()] != 0:
+        false return if a[i.usize()] != b[i.usize()]
+        i <- i + 1
+    return a[i.usize()] == b[i.usize()]
+
+def fill_bg(color: u32) -> void:
+    n: i32 = SG_W * SG_H
+    i: mutable i32 = 0
+    while i < n:
+        SCREEN_GRAB[i.usize()] <- color
+        i <- i + 1
+
+def fill_rect(x: i32, y: i32, w: i32, h: i32, color: u32) -> void:
+    yy: mutable i32 = y
+    while yy < y + h:
+        if yy >= 0 and yy < SG_H:
+            xx: mutable i32 = x
+            while xx < x + w:
+                SCREEN_GRAB[(yy * SG_W + xx).usize()] <- color if xx >= 0 and xx < SG_W
+                xx <- xx + 1
+        yy <- yy + 1
+
+# Draw one glyph (digit 0-9) with its top-left at (cx,cy), each font pixel a scale x scale block.
+def draw_digit(cx: i32, cy: i32, scale: i32, d: i32, fg: u32) -> void:
+    return if d < 0 or d > 9
+    base: i32 = d * 7
+    row: mutable i32 = 0
+    while row < 7:
+        bits: u8 = FONT[(base + row).usize()]
+        col: mutable i32 = 0
+        while col < 5:
+            on: bool = ((bits >> (4 - col).u8()) & 1) == 1
+            fill_rect(cx + col * scale, cy + row * scale, scale, scale, fg) if on
+            col <- col + 1
+        row <- row + 1
+
+# ---- scenes ------------------------------------------------------------------------------------
+
+# counter: a single large digit, centred, showing floor(t/2000) clamped 0..9. Identical within each
+# 2s phase (SAME frames), stepping at each phase boundary. Matches eval/scenarios/one-digit-counter.
+def scene_counter(t_ms: i64) -> void:
+    fill_bg(2105376)                      # 0x00202020 dark grey
+    d: mutable i32 = (t_ms / 2000).i32()
+    d <- 9 if d > 9
+    scale: i32 = 36
+    cx: i32 = SG_W / 2 - (5 * scale) / 2
+    cy: i32 = SG_H / 2 - (7 * scale) / 2
+    draw_digit(cx, cy, scale, d, 15790320)    # 0x00F0F0F0 near-white
+
+def render_scene(scene: u8&, t_ms: i64) -> void:
+    scene_counter(t_ms)                   # only scene for now; dispatch added per new scene
+
+# ---- driver ------------------------------------------------------------------------------------
+
+def main(argc: int, argv: u8&&) -> int:
+    requires argc >= 0
+    scene: u8& = argv[1] if argc >= 2 else "counter".cast[u8&]
+    dir: cstr = argv[2].cast[cstr] if argc >= 3 else "/tmp/scenegen_out"
+    out_w: i32 = clamp_i32(arg_i32(argc, argv, 3, 192), 8, MAX_OUT_W)
+    fps: i32 = clamp_i32(arg_i32(argc, argv, 4, 10), 1, 60)
+    dur_ms: i64 = at_least(arg_i32(argc, argv, 5, 20000), 1000).i64()
+
+    if not sg_streq(scene, "counter"):
+        _ = printf("scenegen: unknown scene (have: counter)\n".cast[u8&])
+        return 2
+
+    _ = mkdir(dir.cast[u8&], 493)
+    build_named_path(&LATEST_PATH[0], &LATEST_TMP[0], dir, "latest.txt")
+
+    out_h0: i32 = clamp_i32(out_w * SG_H / SG_W, 8, 256)
+    out_h: i32 = RING_STRIDE / out_w if out_w * out_h0 > RING_STRIDE else out_h0
+
+    token_cap: i32 = 40000
+    cap_bytes: i32 = token_cap * 4
+    retain: i32 = 100000                  # eval keeps the whole run
+    batch_frames: i32 = fps * 2 if fps * 2 <= MAX_BATCH_FRAMES else MAX_BATCH_FRAMES
+    frame_interval_ms: i64 = (1000 / fps).i64()
+    total: i32 = (dur_ms * fps.i64() / 1000).i32()
+
+    archive_init(dir, 512)
+    _ = printf("scenegen: rendering scene -> fixture (deterministic).\n".cast[u8&])
+    batch: mutable i64 = 0
+    f: mutable i32 = 0
+    while f < total:
+        i: mutable i32 = 0
+        while i < batch_frames and f < total:
+            t_ms: i64 = f.i64() * frame_interval_ms
+            render_scene(scene, t_ms)
+            archive_frame(&SCREEN_GRAB[0], SG_W, SG_H, t_ms)
+            downscale_into(&SCREEN_GRAB[0], SG_W, SG_H, out_w, out_h, i * RING_STRIDE)
+            write_frame_ppm(dir, batch, SG_W, SG_H) if i == 0
+            FRAME_MS[i.usize()] <- t_ms
+            i <- i + 1
+            f <- f + 1
+        _ = write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap, 1)
+        batch <- batch + 1
+    archive_stop()
+    _ = printf("scenegen: done.\n".cast[u8&])
+    return 0

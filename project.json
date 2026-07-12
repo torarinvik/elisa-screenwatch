@@ -16,6 +16,14 @@
       "output": "arch_tool",
       "opt": "3",
       "link-flags": ["-lcompression"]
+    },
+    "scenegen": {
+      "entry": "scenegen.elisa",
+      "emit": "obj",
+      "run-emit": "obj",
+      "output": "scenegen",
+      "opt": "3",
+      "link-flags": ["-lcompression"]
     }
   }
 }

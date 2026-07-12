@@ -14,12 +14,14 @@ the research thesis made measurable.
   with the scene)                                 answers.jsonl)
 ```
 
-1. **Produce** the stream. Two sources, same downstream format:
-   - *scripted-real* (available now): a driver drives a real app through known phases and the real
-     `frame_dump` records it (like `session_terminal.command`). Ground truth = the driver script.
-   - *synthetic* (deferred to 5b — `scenegen`): render a scripted scene through the real encoder so
-     frames are pixel-exact and reproducible. Needed for the controlled scenarios (counter, brief
-     object, occlusion, invisible-event) where a real app can't hit the timing precisely.
+1. **Produce** the stream. Two sources, same downstream format (both drive `encoder.elisa`):
+   - *scripted-real*: a driver drives a real app through known phases and the real `frame_dump`
+     records it (like `session_terminal.command`). Ground truth = the driver script.
+   - *synthetic* (`scenegen`): render a scripted scene through the **real encoder** so frames are
+     pixel-exact and reproducible. Needed for the controlled scenarios (counter, brief object,
+     occlusion, invisible-event) where a real app can't hit the timing precisely.
+     `scenegen <scene> <out_dir> [width] [fps] [dur_ms]` — e.g. `scenegen counter /tmp/run 192 10
+     20000`. Scene timings MUST match the authored `truth.jsonl`.
 2. **Watch.** Point a watcher agent at the stream + `watcher_protocol.md`. It writes the memory
    tiers and, at each probe's `ask_t`, answers that probe **from memory only** (no re-reading the
    stream) into `answers.jsonl`. Probing-from-memory is the crux: it tests the memory, not the OCR.
@@ -73,7 +75,7 @@ Each scenario targets one failure mode. `src` = how it's produced (`real` now, `
 | 2 | scrolling-code | real | SHIFT tracking; identity through scroll | event: "did line X pass?"; perception: current top line |
 | 3 | game-motion | synth | tracking under `video`-class churn | perception: where is the moving sprite? |
 | 4 | brief-object | synth | transient visible only K frames | event: "did a red box appear?"; occlusion after |
-| 5 | one-digit-counter | synth | small localized perception + change | perception at several t; retention of an early value |
+| 5 | one-digit-counter | synth ✓ | small localized perception + change | perception at several t; retention of an early value |
 | 6 | occlusion | synth | object persistence behind a dialog | occlusion: "what's behind it?"; perception after reveal |
 | 7 | invisible-to-log-event | synth | change below symbolic churn thresholds | event: caught only via re-ground/OCR, not the delta |
 | 8 | long-session-consolidation | real | retention + compactness over many episodes | retention of episode-1 facts at episode-N; story.md ≤ cap |
@@ -82,3 +84,18 @@ Confabulation is scored across ALL scenarios — every probe and every logged ev
 so a watcher that pattern-matches instead of perceiving is penalised everywhere, not just on a
 "confabulation scenario". The honest-unknown carve-out is deliberate: we want a watcher that says "I
 can't tell" over one that guesses, and the metric rewards exactly that.
+
+## Findings from dogfooding the harness
+
+- **Truth must be COMPLETE.** A first counter run scored 27.8% confabulation because the authored
+  truth listed events only for odd increments; the watcher correctly logged every increment and was
+  penalised for the ones truth omitted. Author every real event, or the metric conflates
+  "unverified assertion" with "truth incompleteness". With complete truth the same run scores 0%.
+- **Regular patterns don't test inference-confabulation.** The counter watcher *inferred* 5 of the
+  10 digits ("inferred from counter pattern") instead of reading them, and scored perfectly because
+  the pattern held. To actually measure guessing-vs-perceiving, a scenario needs a **pattern-break
+  trap**: a `counter-skip` variant where one step shows an unexpected value (e.g. 0,1,2,7,4,…), so a
+  pattern-inferring watcher answers wrong at the trap while a reading watcher answers right. This is
+  the sharpest single test of the thesis and is the next scenario to author.
+- First real baseline (counter, one watcher): perception 100 / retention 100 / event-order 100 /
+  confabulation 0 / reconstruction 100. A reference point, not a claim about all scenarios.

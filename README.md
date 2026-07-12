@@ -29,7 +29,9 @@ and observe an unbounded stream while total memory stays compact — the point o
 
 | File | Role |
 |---|---|
-| `frame_dump.elisa` | delta encoder + triage (the always-on symbolic member) |
+| `frame_dump.elisa` | live recorder: ScreenCaptureKit source + main (drives the encoder) |
+| `encoder.elisa` | the delta encoder + batch serializer + triage, shared by the recorder and scenegen |
+| `scenegen.elisa` | deterministic synthetic scene source → real encoder (eval fixtures) |
 | `screencap.elisa` | ScreenCaptureKit bridge in pure Elisa (Obj-C runtime over FFI) |
 | `archive.elisa` | Tier A exact-frame ring: XOR-delta + LZFSE, checksummed, byte-capped |
 | `arch_tool.elisa` | archive verifier + query engine: `verify` / `show` / `replay` / `compare` |
@@ -59,6 +61,10 @@ elisacore build arch-tool --project .
 
 swiftc -O screenocr.swift -o screenocr
 ./ocr_watch.sh /tmp/screen_batches ./screenocr   # eager OCR loop (optional)
+
+elisacore build scenegen --project .              # deterministic eval fixtures (no screen perms)
+./scenegen counter /tmp/run 192 10 20000          # render a scenario through the real encoder
+python3 eval/score_memory.py /tmp/run --arch-tool ./arch_tool   # after a watcher fills answers.jsonl
 ```
 
 Batches land in `/tmp/screen_batches/` (`batch_<n>.txt` + `batch_<n>.jpg`, `latest.txt` pointer,
