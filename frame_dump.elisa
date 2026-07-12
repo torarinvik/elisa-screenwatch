@@ -17,8 +17,10 @@
 # A churn guard promotes a heavily-changed frame back to a KEYFRAME (cheaper to state than diff)
 # and a token cap degrades the emit rate for pathological full-screen churn (video playback).
 #
-# Output format (one file per batch, plain text):
-#   BATCH <b> frames=<F> <w>x<h> fps=<fps> t0=<ms> cap=<tok>
+# Output format (one file per batch, plain text; full contract in SPEC.md):
+#   BATCH <b> v=2 frames=<F> <w>x<h> fps=<fps> t0=<ms> cap=<tok>
+#   STATS same=<s> shifted=<sh> keyframes=<k> churn_rows=<c> img=<batch_<b>.jpg|none>
+#   ACTIVITY <still|typing|scrolling|video|switching> conf=<0-100>
 #   KEYFRAME 0 t=<ms>
 #   ASCII
 #   <h rows of w luminance chars " .:-=+*#%@">
@@ -37,13 +39,14 @@
 # pointer (both atomic tmp+rename). The last `retain` batches are kept so evidence pointers
 # ("batch 214 frame 30") stay resolvable; older batch files are pruned.
 #
-# USAGE: frame_dump [out_dir] [width] [fps] [n_seconds] [token_cap] [retain]
-#   out_dir    directory for batch files          (default /tmp/screen_batches)
-#   width      downscaled frame width             (default 192; height follows aspect; max 256)
-#   fps        capture rate                       (default 24; max 60)
-#   n_seconds  batch window in seconds            (default 3; fps*n_seconds capped at 256 frames)
-#   token_cap  soft per-batch token budget        (default 40000; degrades emit rate past it)
-#   retain     batch files kept on disk           (default 40)
+# USAGE: frame_dump [out_dir] [width] [fps] [n_seconds] [token_cap] [retain] [save_images]
+#   out_dir     directory for batch files          (default /tmp/screen_batches)
+#   width       downscaled frame width             (default 192; height follows aspect; max 256)
+#   fps         capture rate                       (default 24; max 60)
+#   n_seconds   batch window in seconds            (default 3; fps*n_seconds capped at 256 frames)
+#   token_cap   soft per-batch token budget        (default 40000; degrades emit rate past it)
+#   retain      batch files kept on disk           (default 40)
+#   save_images 1 = save a full-res keyframe JPEG per batch (active-perception zoom), 0 = off
 #
 # Written for -Wflow-strict: decisions are values, guards, match arms, or machine transitions.
 
@@ -57,6 +60,7 @@ extern remove(path: u8&) -> int
 extern mkdir(path: u8&, mode: u32) -> int
 extern atoi(s: u8&) -> int
 extern printf(fmt: u8&) -> int
+extern system(cmd: u8&) -> int
 
 global SCREEN_GRAB: array[u32, 24000000] = zeroed
 global GRAB_CAP: i32 = 24000000
@@ -96,11 +100,31 @@ global mutable LATEST_PATH: array[u8, 1024] = zeroed
 global mutable LATEST_TMP: array[u8, 1024] = zeroed
 global mutable PRUNE_PATH: array[u8, 1024] = zeroed
 global mutable PRUNE_TMP: array[u8, 1024] = zeroed
+global mutable PPM_PATH: array[u8, 1024] = zeroed
+global mutable PPM_TMP: array[u8, 1024] = zeroed
+global mutable CMD_BUF: array[u8, 4096] = zeroed
+
+# per-batch serialization stats (set by serialize_frames, read by the header/ACTIVITY writer)
+global mutable g_same: i32 = 0
+global mutable g_shifted: i32 = 0
+global mutable g_keyframes: i32 = 0
+global mutable g_churn: i32 = 0
+global mutable g_emitted: i32 = 0
+global mutable g_rate: i32 = 1
+global mutable g_bytes: i32 = 0
 
 # How a captured frame gets serialized: heavy churn restates the scene, light churn diffs it.
 enum FrameEmit:
     Keyframe
     Delta
+
+# The bass member's per-batch verdict (SPEC.md triage rules, applied in priority order).
+enum Activity:
+    Still
+    Typing
+    Scrolling
+    Video
+    Switching
 
 # Row-coalescing scanner states for stage_delta (see emit_changed_blocks).
 enum Coalesce:
@@ -392,43 +416,49 @@ def write_latest(batch: i64) -> int:
         return 1
     return 0
 
-# Serialize a whole batch to <dir>/batch_<batch>.txt (atomic), update latest.txt, prune old.
-def write_batch_dir(dir: cstr, batch0: i64, nframes: i32, dw: i32, dh: i32, fps: i32, cap_bytes: i32, retain: i32, tok: i32) -> int:
-    batch: i64 = batch0 if batch0 >= 0 else 0      # provable non-negative for the path builders
-    build_num_path(&BATCH_PATH[0], &BATCH_TMP[0], dir, "/batch_", batch, ".txt")
-    f: void&? = fopen(&BATCH_TMP[0], "wb".cast[u8&])
-    if f is fp:
-        write_batch_to(fp, dir, batch, nframes, dw, dh, fps, cap_bytes, retain, tok)
-        return 1
-    return 0
+# SPEC.md triage: classify the finished batch from its serialization stats (priority order).
+def classify_activity(emitted: i32, same: i32, shifted: i32, kf_mid: i32, churn: i32, rate: i32, dh: i32) -> Activity:
+    Activity.Video return if rate > 1 or kf_mid >= 2 or churn >= emitted * dh * 4 / 10
+    Activity.Switching return if kf_mid == 1
+    Activity.Scrolling return if shifted > 0
+    Activity.Still return if churn <= dh / 8 and same * 10 >= emitted * 9
+    return Activity.Typing
 
-# Stage + write every section of one batch into an open file, swap it live, prune the oldest.
-def write_batch_to(fp: void&, dir: cstr, batch: i64, nframes: i32, dw: i32, dh: i32, fps: i32, cap_bytes: i32, retain: i32, tok: i32) -> void:
-    requires batch >= 0
-    total: mutable i32 = 0
-    # header
-    txt_len <- 0
-    txt_str("BATCH ")
-    txt_dec(batch)
-    txt_str(" frames=")
-    txt_dec(nframes.i64())
-    txt_str(" ")
-    txt_dec(dw.i64())
-    txt_str("x")
-    txt_dec(dh.i64())
-    txt_str(" fps=")
-    txt_dec(fps.i64())
-    txt_str(" t0=")
-    txt_dec(FRAME_MS[0.usize()])
-    txt_str(" cap=")
-    txt_dec(tok.i64())
-    txt_byte(10)
+def activity_name(a: Activity) -> cstr:
+    return match a:
+        Activity.Still: "still"
+        Activity.Typing: "typing"
+        Activity.Scrolling: "scrolling"
+        Activity.Video: "video"
+        Activity.Switching: "switching"
+
+# Coarse confidence: 90 when the winning rule's signal is decisive, else 60 (SPEC.md).
+def activity_conf(a: Activity, emitted: i32, same: i32, shifted: i32, kf_mid: i32, churn: i32, rate: i32, dh: i32) -> i32:
+    strong: bool = match a:
+        Activity.Video: rate > 1
+        Activity.Switching: kf_mid == 1 and churn <= dh
+        Activity.Scrolling: shifted * 2 >= emitted
+        Activity.Still: churn == 0
+        Activity.Typing: same * 2 >= emitted
+    return 90 if strong else 60
+
+# Flush the staging buffer to the file only on the emit pass.
+def fwrite_txt_if(fp: void&, do_write: i32) -> void:
+    return if do_write == 0
     _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
-    total <- total + txt_len
+
+# Serialize the frames + trailer of one batch. do_write=0 is the stats pass (nothing hits the
+# file), do_write=1 is the emit pass; both run the IDENTICAL staging logic so the stats always
+# describe exactly what pass 2 writes. Results land in the g_* stats globals.
+def serialize_frames(fp: void&, do_write: i32, nframes: i32, dw: i32, dh: i32, cap_bytes: i32) -> void:
+    total: mutable i32 = 0
+    same: mutable i32 = 0
+    shifted: mutable i32 = 0
+    keyframes: mutable i32 = 1
     # frame 0 is always a keyframe
     render_grid(0, dw, dh)
     stage_keyframe(0, 0, dw, dh, FRAME_MS[0.usize()])
-    _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
+    fwrite_txt_if(fp, do_write)
     total <- total + txt_len
     copy_cur_to_prev(dw, dh)
     emitted: mutable i32 = 1
@@ -443,12 +473,15 @@ def write_batch_to(fp: void&, dir: cstr, batch: i64, nframes: i32, dw: i32, dh: 
         render_grid(base, dw, dh)
         d: i32 = detect_shift(dw, dh)
         cr: i32 = mark_changed(dw, dh, d)
+        same <- same + 1 if cr == 0
+        shifted <- shifted + 1 if d != 0 and cr > 0
         match frame_emit_kind(cr, dh):
             FrameEmit.Keyframe:
                 stage_keyframe(i, base, dw, dh, FRAME_MS[i.usize()])
+                keyframes <- keyframes + 1
             FrameEmit.Delta:
                 stage_delta(i, dw, dh, FRAME_MS[i.usize()], d, cr)
-        _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
+        fwrite_txt_if(fp, do_write)
         total <- total + txt_len
         copy_cur_to_prev(dw, dh)
         emitted <- emitted + 1
@@ -466,16 +499,126 @@ def write_batch_to(fp: void&, dir: cstr, batch: i64, nframes: i32, dw: i32, dh: 
     txt_str(" rate=")
     txt_dec(emit_every.i64())
     txt_byte(10)
-    _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
-    _ = fclose(fp)
-    _ = rename(&BATCH_TMP[0], &BATCH_PATH[0])
-    _ = write_latest(batch)
-    prune_batch(dir, batch - retain.i64())
+    fwrite_txt_if(fp, do_write)
+    g_same <- same
+    g_shifted <- shifted
+    g_keyframes <- keyframes
+    g_churn <- changed_total
+    g_emitted <- emitted
+    g_rate <- emit_every
+    g_bytes <- total
 
-# Delete the batch file that just fell out of the retention window (no-op before it fills).
+# BATCH v=2 header + STATS + ACTIVITY lines (needs the stats pass to have run).
+def write_header(fp: void&, batch: i64, nframes: i32, dw: i32, dh: i32, fps: i32, tok: i32, with_img: i32) -> void:
+    txt_len <- 0
+    txt_str("BATCH ")
+    txt_dec(batch)
+    txt_str(" v=2 frames=")
+    txt_dec(nframes.i64())
+    txt_str(" ")
+    txt_dec(dw.i64())
+    txt_str("x")
+    txt_dec(dh.i64())
+    txt_str(" fps=")
+    txt_dec(fps.i64())
+    txt_str(" t0=")
+    txt_dec(FRAME_MS[0.usize()])
+    txt_str(" cap=")
+    txt_dec(tok.i64())
+    txt_byte(10)
+    txt_str("STATS same=")
+    txt_dec(g_same.i64())
+    txt_str(" shifted=")
+    txt_dec(g_shifted.i64())
+    txt_str(" keyframes=")
+    txt_dec(g_keyframes.i64())
+    txt_str(" churn_rows=")
+    txt_dec(g_churn.i64())
+    txt_str(" img=")
+    txt_str("none") if with_img == 0
+    txt_str("batch_") if with_img == 1
+    txt_dec(batch) if with_img == 1
+    txt_str(".jpg") if with_img == 1
+    txt_byte(10)
+    kf_mid: i32 = g_keyframes - 1
+    act: Activity = classify_activity(g_emitted, g_same, g_shifted, kf_mid, g_churn, g_rate, dh)
+    txt_str("ACTIVITY ")
+    txt_str(activity_name(act))
+    txt_str(" conf=")
+    txt_dec(activity_conf(act, g_emitted, g_same, g_shifted, kf_mid, g_churn, g_rate, dh).i64())
+    txt_byte(10)
+    _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
+
+# Serialize a whole batch to <dir>/batch_<batch>.txt (atomic), update latest.txt, prune old.
+def write_batch_dir(dir: cstr, batch0: i64, nframes: i32, dw: i32, dh: i32, fps: i32, cap_bytes: i32, retain: i32, tok: i32, with_img: i32) -> int:
+    batch: i64 = batch0 if batch0 >= 0 else 0      # provable non-negative for the path builders
+    build_num_path(&BATCH_PATH[0], &BATCH_TMP[0], dir, "/batch_", batch, ".txt")
+    f: void&? = fopen(&BATCH_TMP[0], "wb".cast[u8&])
+    if f is fp:
+        serialize_frames(fp, 0, nframes, dw, dh, cap_bytes)      # pass 1: stats only
+        write_header(fp, batch, nframes, dw, dh, fps, tok, with_img)
+        serialize_frames(fp, 1, nframes, dw, dh, cap_bytes)      # pass 2: the actual emit
+        _ = fclose(fp)
+        _ = rename(&BATCH_TMP[0], &BATCH_PATH[0])
+        _ = write_latest(batch)
+        convert_ppm_async(dir, batch) if with_img == 1
+        prune_batch(dir, batch - retain.i64())
+        return 1
+    return 0
+
+# ---- full-resolution keyframe image sidecar (active-perception enabler) ----
+
+# Dump SCREEN_GRAB (the batch's frame-0 grab, full res) as a binary PPM next to the batch file.
+def write_frame_ppm(dir: cstr, batch0: i64, w: i32, h: i32) -> void:
+    batch: i64 = batch0 if batch0 >= 0 else 0
+    build_num_path(&PPM_PATH[0], &PPM_TMP[0], dir, "/batch_", batch, ".ppm")
+    f: void&? = fopen(&PPM_PATH[0], "wb".cast[u8&])
+    if f is fp:
+        txt_len <- 0
+        txt_str("P6\n")
+        txt_dec(w.i64())
+        txt_str(" ")
+        txt_dec(h.i64())
+        txt_str("\n255\n")
+        _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
+        for y in 0..<h:
+            txt_len <- 0
+            for x in 0..<w:
+                p: u32 = SCREEN_GRAB[(y * w + x).usize()]
+                txt_byte(((p >> 16) & 255).u8())
+                txt_byte(((p >> 8) & 255).u8())
+                txt_byte((p & 255).u8())
+            _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
+        _ = fclose(fp)
+
+# Fire-and-forget PPM -> JPEG conversion via sips; deletes the PPM when done.
+def convert_ppm_async(dir: cstr, batch0: i64) -> void:
+    batch: i64 = batch0 if batch0 >= 0 else 0
+    off: mutable i32 = 0
+    off <- u8buf_set_str(&CMD_BUF[0], off, "(sips -s format jpeg '")
+    off <- u8buf_set_str(&CMD_BUF[0], off, dir)
+    off <- u8buf_set_str(&CMD_BUF[0], off, "/batch_")
+    off <- u8buf_set_num(&CMD_BUF[0], off, batch)
+    off <- u8buf_set_str(&CMD_BUF[0], off, ".ppm' --out '")
+    off <- u8buf_set_str(&CMD_BUF[0], off, dir)
+    off <- u8buf_set_str(&CMD_BUF[0], off, "/batch_")
+    off <- u8buf_set_num(&CMD_BUF[0], off, batch)
+    off <- u8buf_set_str(&CMD_BUF[0], off, ".jpg' && rm -f '")
+    off <- u8buf_set_str(&CMD_BUF[0], off, dir)
+    off <- u8buf_set_str(&CMD_BUF[0], off, "/batch_")
+    off <- u8buf_set_num(&CMD_BUF[0], off, batch)
+    off <- u8buf_set_str(&CMD_BUF[0], off, ".ppm') >/dev/null 2>&1 &")
+    CMD_BUF[off.usize()] <- 0
+    _ = system(&CMD_BUF[0])
+
+# Delete the batch artifacts that just fell out of the retention window (no-op before it fills).
 def prune_batch(dir: cstr, old: i64) -> void:
     return if old < 0
     build_num_path(&PRUNE_PATH[0], &PRUNE_TMP[0], dir, "/batch_", old, ".txt")
+    _ = remove(&PRUNE_PATH[0])
+    build_num_path(&PRUNE_PATH[0], &PRUNE_TMP[0], dir, "/batch_", old, ".jpg")
+    _ = remove(&PRUNE_PATH[0])
+    build_num_path(&PRUNE_PATH[0], &PRUNE_TMP[0], dir, "/batch_", old, ".ocr.txt")
     _ = remove(&PRUNE_PATH[0])
 
 def fail(msg: cstr) -> int:
@@ -506,6 +649,9 @@ def main(argc: int, argv: u8&&) -> int:
     retain: mutable i32 = 40
     retain <- atoi(argv[6]).i32() if argc >= 7
     retain <- 1 if retain < 1
+    save_images: mutable i32 = 1
+    save_images <- atoi(argv[7]).i32() if argc >= 8
+    save_images <- 1 if save_images != 0
 
     fail("frame_dump: cannot start capture (Screen Recording permission?)\n") return if screencap_start() == 0
     fail("frame_dump: no frames arrived\n") return if screencap_wait_first_frame() == 0
@@ -541,10 +687,11 @@ def main(argc: int, argv: u8&&) -> int:
             next_ms <- next_ms + frame_interval_ms
             continue if screencap_grab(&SCREEN_GRAB[0], GRAB_CAP) == 0
             downscale_into(&SCREEN_GRAB[0], sw, sh, out_w, out_h, i * RING_STRIDE)
+            write_frame_ppm(dir, batch, sw, sh) if save_images == 1 and i == 0
             FRAME_MS[i.usize()] <- screencap_now_ms() - start_ms
             i <- i + 1
         continue if i == 0
-        _ = write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap)
+        _ = write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap, save_images)
         batch <- batch + 1
     screencap_stop()
     _ = printf("frame_dump: stopped.\n".cast[u8&])
