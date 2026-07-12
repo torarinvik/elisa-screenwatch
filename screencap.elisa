@@ -196,30 +196,35 @@ def sc_content_cb(blk: void&?, content: void&?, err: void&?) -> void:
     if content != null:
         displays: void&? = m0(content, sel("displays"))
         d: void&? = m_idx(displays, sel("objectAtIndex:"), 0.usize())
-        g_display <- m0(d, sel("retain"))
+        # the display object is explicitly retained, so it outlives this callback frame
+        trusted Unsafe.StaleRef:
+            g_display <- m0(d, sel("retain"))
     g_content_done <- 1
 @callconv(c)
 def sc_start_cb(blk: void&?, err: void&?) -> void:
     g_start_done <- 1
 
+# The stored pointers are all process-lifetime: fn pointers, string literals, global block isa.
 def fill_block_a(invoke: void&?, sig: cstr) -> void:
-    g_desc_a.reserved <- 0u64
-    g_desc_a.size <- 32u64
-    g_desc_a.signature <- sig.cast[u8&].cast[void&?]
-    g_block_a.isa <- g_block_isa
-    g_block_a.flags <- 0x50000000
-    g_block_a.reserved <- 0
-    g_block_a.invoke <- invoke
-    g_block_a.descriptor <- (&g_desc_a).cast[void&?]
+    trusted Unsafe.StaleRef:
+        g_desc_a.reserved <- 0u64
+        g_desc_a.size <- 32u64
+        g_desc_a.signature <- sig.cast[u8&].cast[void&?]
+        g_block_a.isa <- g_block_isa
+        g_block_a.flags <- 0x50000000
+        g_block_a.reserved <- 0
+        g_block_a.invoke <- invoke
+        g_block_a.descriptor <- (&g_desc_a).cast[void&?]
 def fill_block_b(invoke: void&?, sig: cstr) -> void:
-    g_desc_b.reserved <- 0u64
-    g_desc_b.size <- 32u64
-    g_desc_b.signature <- sig.cast[u8&].cast[void&?]
-    g_block_b.isa <- g_block_isa
-    g_block_b.flags <- 0x50000000
-    g_block_b.reserved <- 0
-    g_block_b.invoke <- invoke
-    g_block_b.descriptor <- (&g_desc_b).cast[void&?]
+    trusted Unsafe.StaleRef:
+        g_desc_b.reserved <- 0u64
+        g_desc_b.size <- 32u64
+        g_desc_b.signature <- sig.cast[u8&].cast[void&?]
+        g_block_b.isa <- g_block_isa
+        g_block_b.flags <- 0x50000000
+        g_block_b.reserved <- 0
+        g_block_b.invoke <- invoke
+        g_block_b.descriptor <- (&g_desc_b).cast[void&?]
 
 # ---- per-frame processing (runs on the SCStream background queue via the IMP) -----------------------
 def process_audio(sb: void&?) -> void:
@@ -318,8 +323,10 @@ def sc_sample_imp(self: void&?, cmd: void&?, stream: void&?, sb: void&?, kind: i
 # ---- public lifecycle ------------------------------------------------------------------------------
 def screencap_start() -> int:
     h: void&? = dlopen(null, 2)
-    g_msgSend <- dlsym(h, "objc_msgSend".cast[u8&])
-    g_block_isa <- dlsym(h, "_NSConcreteGlobalBlock".cast[u8&])
+    # dlsym on the main executable image: these symbols live for the whole process
+    trusted Unsafe.StaleRef:
+        g_msgSend <- dlsym(h, "objc_msgSend".cast[u8&])
+        g_block_isa <- dlsym(h, "_NSConcreteGlobalBlock".cast[u8&])
     if g_msgSend == null or g_block_isa == null:
         return 0
 
