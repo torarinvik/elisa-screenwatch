@@ -1,0 +1,8 @@
+{"id":"p0","ask_t":1000,"kind":"perception","q":"What single digit is shown on screen now?","gold":"0","match":"numeric","fact_t":0}
+{"id":"p3","ask_t":7000,"kind":"perception","q":"What single digit is shown on screen now?","gold":"3","match":"numeric","fact_t":6000}
+{"id":"p6","ask_t":13000,"kind":"perception","q":"What single digit is shown on screen now?","gold":"6","match":"numeric","fact_t":12000}
+{"id":"p9","ask_t":19000,"kind":"perception","q":"What single digit is shown on screen now?","gold":"9","match":"numeric","fact_t":18000}
+{"id":"pr1","ask_t":19000,"kind":"retention","q":"What digit was shown near the start (around t=3s)?","gold":"1","match":"numeric","fact_t":2000}
+{"id":"pr3","ask_t":19000,"kind":"retention","q":"What digit was shown around t=7s?","gold":"3","match":"numeric","fact_t":6000}
+{"id":"pe5","ask_t":19000,"kind":"event","q":"Did the counter ever reach 5?","gold":"yes","match":"boolean","fact_t":10000}
+{"id":"pe11","ask_t":19000,"kind":"event","q":"Did the counter ever reach 11?","gold":"no","match":"boolean","fact_t":0}

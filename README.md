@@ -39,7 +39,7 @@ and observe an unbounded stream while total memory stays compact — the point o
 | `ocr_watch.sh` | eager OCR trigger on scene-change batches |
 | `SPEC.md` | system contracts: members, stream format v2, blackboard layout |
 | `watcher_protocol.md` | watcher/boss agent protocol (external memory, escalation) |
-| `eval/` | scoring harness: scripted-truth session + `score.py` |
+| `eval/` | scoring harness: `score.py` (triage) + `score_memory.py` (watcher memory) + `scenarios.md` |
 
 ## Build & run
 
@@ -67,10 +67,16 @@ agent at `watcher_protocol.md` to start observing.
 
 ## Verifying
 
-`eval/session_terminal.command` drives a scripted ground-truth session; `eval/score.py` aligns its
-phases against the recorded batches and scores the watcher's log. Reconstruction fidelity of the
-delta stream itself is lossless by construction (churn re-keyframes; dropped frames never update the
-baseline).
+Two levels of scoring. `eval/score.py` grades the **symbolic** triage: it aligns a scripted session's
+phases (`eval/session_terminal.command`) against the recorded batches and checks the ACTIVITY labels.
+`eval/score_memory.py` grades the **neural** watcher: against a scenario's authored ground truth
+(`eval/scenarios/<name>/{truth,probes}.jsonl`) it scores perception accuracy, memory retention,
+event order, and — the metric that matters most — confabulation rate, plus tokens/latency. Honest
+"unknown" answers are misses but never confabulations, so the harness rewards a watcher that declines
+over one that guesses. `python3 eval/score_memory.py --selftest` checks the metric math. See
+`eval/scenarios.md` for the 8-scenario battery. Reconstruction fidelity of the delta stream is
+lossless by construction (churn re-keyframes; dropped frames never update the baseline) and of the
+archive is a tested property (`arch_tool verify`).
 
 ## History
 
