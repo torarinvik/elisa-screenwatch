@@ -44,6 +44,8 @@
 #   n_seconds  batch window in seconds            (default 3; fps*n_seconds capped at 256 frames)
 #   token_cap  soft per-batch token budget        (default 40000; degrades emit rate past it)
 #   retain     batch files kept on disk           (default 40)
+#
+# Written for -Wflow-strict: decisions are values, guards, match arms, or machine transitions.
 
 include "./screencap.elisa"
 
@@ -78,6 +80,15 @@ global mutable txt_len: i32 = 0
 
 global RAMP: cstr = " .:-=+*#%@"          # 10-step luminance ramp, dark -> bright
 
+# hue letters (ASCII codes): R O Y G C B M; +32 lowercases = dim shade of the hue
+global HUE_R: u8 = 82
+global HUE_O: u8 = 79
+global HUE_Y: u8 = 89
+global HUE_G: u8 = 71
+global HUE_C: u8 = 67
+global HUE_B: u8 = 66
+global HUE_M: u8 = 77
+
 # path buffers (final + ".tmp" sibling for atomic rename)
 global mutable BATCH_PATH: array[u8, 1024] = zeroed
 global mutable BATCH_TMP: array[u8, 1024] = zeroed
@@ -85,6 +96,17 @@ global mutable LATEST_PATH: array[u8, 1024] = zeroed
 global mutable LATEST_TMP: array[u8, 1024] = zeroed
 global mutable PRUNE_PATH: array[u8, 1024] = zeroed
 global mutable PRUNE_TMP: array[u8, 1024] = zeroed
+
+# How a captured frame gets serialized: heavy churn restates the scene, light churn diffs it.
+enum FrameEmit:
+    Keyframe
+    Delta
+
+# Row-coalescing scanner states for stage_delta (see emit_changed_blocks).
+enum Coalesce:
+    Scan
+    Grow(i32, i32)
+    Emit(i32, i32)
 
 # ---- small text/number helpers into TXT ----
 
@@ -94,20 +116,17 @@ def txt_byte(b: u8) -> void:
 
 def txt_str(s: cstr) -> void:
     i: mutable i32 = 0
-    while s[i.usize()] != 0u8:
+    while s[i.usize()] != 0:
         txt_byte(s[i.usize()])
         i <- i + 1
 
 def txt_dec(v0: i64) -> void:
-    v: mutable i64 = v0
-    if v < 0:
-        txt_byte(45u8)
-        v <- 0 - v
+    neg: bool = v0 < 0
+    txt_byte(45) if neg
+    v: mutable i64 = (0 - v0) if neg else v0
+    txt_byte(48) if v == 0
     tmp: mutable array[u8, 24] = zeroed
     n: mutable i32 = 0
-    if v == 0:
-        txt_byte(48u8)
-        return
     while v > 0:
         tmp[n.usize()] <- (48 + (v % 10).i32()).u8()
         v <- v / 10
@@ -121,28 +140,24 @@ def txt_dec(v0: i64) -> void:
 def u8buf_set_str(dst: mutable u8&, off0: i32, s: cstr) -> i32:
     off: mutable i32 = off0
     i: mutable i32 = 0
-    while s[i.usize()] != 0u8:
+    while s[i.usize()] != 0:
         dst[off.usize()] <- s[i.usize()]
         off <- off + 1
         i <- i + 1
     return off
 
 def u8buf_set_num(dst: mutable u8&, off0: i32, v0: i64) -> i32:
+    requires v0 >= 0
     off: mutable i32 = off0
     v: mutable i64 = v0
-    if v < 0:
-        dst[off.usize()] <- 45u8
-        off <- off + 1
-        v <- 0 - v
     tmp: mutable array[u8, 24] = zeroed
     n: mutable i32 = 0
-    if v == 0:
-        dst[off.usize()] <- 48u8
-        return off + 1
     while v > 0:
         tmp[n.usize()] <- (48 + (v % 10).i32()).u8()
         v <- v / 10
         n <- n + 1
+    dst[off.usize()] <- 48 if n == 0
+    off <- off + 1 if n == 0
     while n > 0:
         n <- n - 1
         dst[off.usize()] <- tmp[n.usize()]
@@ -151,18 +166,17 @@ def u8buf_set_num(dst: mutable u8&, off0: i32, v0: i64) -> i32:
 
 # dst = dir + prefix + n + suffix ; tmp = dst + ".tmp"  (both NUL-terminated)
 def build_num_path(dst: mutable u8&, tmp: mutable u8&, dir: cstr, prefix: cstr, n: i64, suffix: cstr) -> void:
+    requires n >= 0
     off: mutable i32 = 0
     off <- u8buf_set_str(dst, off, dir)
     off <- u8buf_set_str(dst, off, prefix)
     off <- u8buf_set_num(dst, off, n)
     off <- u8buf_set_str(dst, off, suffix)
-    dst[off.usize()] <- 0u8
-    j: mutable i32 = 0
-    while j < off:
+    dst[off.usize()] <- 0
+    for j in 0..<off:
         tmp[j.usize()] <- dst[j.usize()]
-        j <- j + 1
     e: i32 = u8buf_set_str(tmp, off, ".tmp")
-    tmp[e.usize()] <- 0u8
+    tmp[e.usize()] <- 0
 
 # dst = dir + "/" + name ; tmp = dst + ".tmp"
 def build_named_path(dst: mutable u8&, tmp: mutable u8&, dir: cstr, name: cstr) -> void:
@@ -170,146 +184,83 @@ def build_named_path(dst: mutable u8&, tmp: mutable u8&, dir: cstr, name: cstr) 
     off <- u8buf_set_str(dst, off, dir)
     off <- u8buf_set_str(dst, off, "/")
     off <- u8buf_set_str(dst, off, name)
-    dst[off.usize()] <- 0u8
-    j: mutable i32 = 0
-    while j < off:
+    dst[off.usize()] <- 0
+    for j in 0..<off:
         tmp[j.usize()] <- dst[j.usize()]
-        j <- j + 1
     e: i32 = u8buf_set_str(tmp, off, ".tmp")
-    tmp[e.usize()] <- 0u8
+    tmp[e.usize()] <- 0
+
+# Hue letter for a clearly-colored pixel, by dominant-channel ordering. Six orderings,
+# each with a boundary lean toward the neighbouring hue.
+def hue_char(r: i32, g: i32, b: i32) -> u8:
+    (HUE_O if g - b > (r - b) / 2 else HUE_R) return if r >= g and g >= b
+    (HUE_G if g - r > (g - b) / 2 else HUE_Y) return if g >= r and r >= b
+    (HUE_C if b - r > (g - r) / 2 else HUE_G) return if g >= b and b >= r
+    (HUE_B if b - g > (b - r) / 2 else HUE_C) return if b >= g and g >= r
+    (HUE_M if r - g > (b - g) / 2 else HUE_B) return if b >= r and r >= g
+    return HUE_M
 
 # Classify a pixel into a single readable char: low-saturation -> luminance ramp,
-# otherwise a hue letter (R red, O orange, Y yellow, G green, C cyan, B blue, M magenta),
-# uppercase if bright, lowercase if dim.
+# otherwise a hue letter, lowercased when dim.
 def color_char(p: u32) -> u8:
-    r: i32 = ((p >> 16u32) & 255u32).i32()
-    g: i32 = ((p >> 8u32) & 255u32).i32()
-    b: i32 = (p & 255u32).i32()
-    mx: mutable i32 = r
-    if g > mx:
-        mx <- g
-    if b > mx:
-        mx <- b
-    mn: mutable i32 = r
-    if g < mn:
-        mn <- g
-    if b < mn:
-        mn <- b
-    lum: i32 = (r * 3 + g * 6 + b) / 10
-    if mx - mn < 28:                            # effectively grayscale
-        idx: mutable i32 = lum / 26
-        if idx > 9:
-            idx <- 9
-        return RAMP[idx.usize()]
-    # hue bucket by dominant channels
-    c: mutable u8 = 0u8
-    if r >= g and g >= b:
-        if g - b > (r - b) / 2:
-            c <- 79u8                            # O orange (red-yellow)
-        else:
-            c <- 82u8                            # R red
-    else:
-        if g >= r and r >= b:
-            c <- 89u8                            # Y yellow-green side
-            if g - r > (g - b) / 2:
-                c <- 71u8                        # G green
-        else:
-            if g >= b and b >= r:
-                c <- 71u8                        # G green
-                if b - r > (g - r) / 2:
-                    c <- 67u8                    # C cyan
-            else:
-                if b >= g and g >= r:
-                    c <- 67u8                    # C cyan
-                    if b - g > (b - r) / 2:
-                        c <- 66u8                # B blue
-                else:
-                    if b >= r and r >= g:
-                        c <- 66u8                # B blue
-                        if r - g > (b - g) / 2:
-                            c <- 77u8            # M magenta
-                    else:
-                        c <- 77u8                # M magenta / pink
-    if lum < 110:
-        c <- c + 32u8                            # lowercase = dim shade of the hue
-    return c
+    r: i32 = ((p >> 16) & 255).i32()
+    g: i32 = ((p >> 8) & 255).i32()
+    b: i32 = (p & 255).i32()
+    mx: i32 = r if r >= g and r >= b else (g if g >= b else b)
+    mn: i32 = r if r <= g and r <= b else (g if g <= b else b)
+    lum: i32 = (r * 3 + g * 6 + b) / 10          # weights sum to 10 -> lum <= 255, ramp index <= 9
+    RAMP[(lum / 26).usize()] return if mx - mn < 28
+    c: u8 = hue_char(r, g, b)
+    dim: u8 = 32 if lum < 110 else 0
+    return c + dim
 
 # Box-downscale src (sw x sh) into the ring slot at RING[base..] (dw x dh).
 def downscale_into(src: u32&, sw: i32, sh: i32, dw: i32, dh: i32, base: i32) -> void:
-    dy: mutable i32 = 0
-    while dy < dh:
+    for dy in 0..<dh:
         y0: i32 = dy * sh / dh
-        y1m: i32 = (dy + 1) * sh / dh
-        y1: mutable i32 = y1m
-        if y1 <= y0:
-            y1 <- y0 + 1
-        dx: mutable i32 = 0
-        while dx < dw:
+        y1: i32 = (dy + 1) * sh / dh if (dy + 1) * sh / dh > y0 else y0 + 1
+        for dx in 0..<dw:
             x0: i32 = dx * sw / dw
-            x1m: i32 = (dx + 1) * sw / dw
-            x1: mutable i32 = x1m
-            if x1 <= x0:
-                x1 <- x0 + 1
+            x1: i32 = (dx + 1) * sw / dw if (dx + 1) * sw / dw > x0 else x0 + 1
             rs: mutable u32 = 0
             gs: mutable u32 = 0
             bs: mutable u32 = 0
             cnt: mutable u32 = 0
-            y: mutable i32 = y0
-            while y < y1:
-                x: mutable i32 = x0
-                while x < x1:
+            for y in y0..<y1:
+                for x in x0..<x1:
                     p: u32 = src[(y * sw + x).usize()]
-                    rs <- rs + ((p >> 16u32) & 255u32)
-                    gs <- gs + ((p >> 8u32) & 255u32)
-                    bs <- bs + (p & 255u32)
-                    cnt <- cnt + 1u32
-                    x <- x + 1
-                y <- y + 1
-            RING[(base + dy * dw + dx).usize()] <- ((rs / cnt) << 16u32) | ((gs / cnt) << 8u32) | (bs / cnt)
-            dx <- dx + 1
-        dy <- dy + 1
+                    rs <- rs + ((p >> 16) & 255)
+                    gs <- gs + ((p >> 8) & 255)
+                    bs <- bs + (p & 255)
+                    cnt <- cnt + 1
+            RING[(base + dy * dw + dx).usize()] <- ((rs / cnt) << 16) | ((gs / cnt) << 8) | (bs / cnt)
 
 # ---- delta-encoding core ----
 
 # Render RING pixels at `base` into CUR_GRID (luminance ramp cell per pixel).
 def render_grid(base: i32, dw: i32, dh: i32) -> void:
-    ay: mutable i32 = 0
-    while ay < dh:
-        ax: mutable i32 = 0
-        while ax < dw:
-            p: u32 = RING[(base + ay * dw + ax).usize()]
-            r: u32 = (p >> 16u32) & 255u32
-            g: u32 = (p >> 8u32) & 255u32
-            b: u32 = p & 255u32
-            lum: u32 = (r * 3u32 + g * 6u32 + b) / 10u32
-            i: mutable u32 = lum / 26u32
-            if i > 9u32:
-                i <- 9u32
-            CUR_GRID[(ay * dw + ax).usize()] <- RAMP[i.usize()]
-            ax <- ax + 1
-        ay <- ay + 1
+    can Scalar:                                      # RAMP lookup is a gather; ~24k cells/frame scalar is fine
+        for ay in 0..<dh:
+            for ax in 0..<dw:
+                p: u32 = RING[(base + ay * dw + ax).usize()]
+                lum: u32 = (((p >> 16) & 255) * 3 + ((p >> 8) & 255) * 6 + (p & 255)) / 10
+                CUR_GRID[(ay * dw + ax).usize()] <- RAMP[(lum / 26).usize()]
 
 # True iff CUR_GRID row rc equals PREV_GRID row rp (cell-exact -> lossless change detection).
-def cur_prev_row_equal(dw: i32, rc: i32, rp: i32) -> i32:
+def cur_prev_row_equal(dw: i32, rc: i32, rp: i32) -> bool:
     ca: i32 = rc * dw
     pa: i32 = rp * dw
-    k: mutable i32 = 0
-    while k < dw:
-        if CUR_GRID[(ca + k).usize()] != PREV_GRID[(pa + k).usize()]:
-            return 0
-        k <- k + 1
-    return 1
+    for k in 0..<dw:
+        false return if CUR_GRID[(ca + k).usize()] != PREV_GRID[(pa + k).usize()]
+    return true
 
 # Count rows that match if the previous grid is shifted by d (predicted cur[r] = prev[r-d]).
 def count_matches(dw: i32, dh: i32, d: i32) -> i32:
     c: mutable i32 = 0
-    r: mutable i32 = 0
-    while r < dh:
+    for r in 0..<dh:
         s: i32 = r - d
-        if s >= 0 and s < dh:
-            if cur_prev_row_equal(dw, r, s) != 0:
-                c <- c + 1
-        r <- r + 1
+        hit: bool = s >= 0 and s < dh and cur_prev_row_equal(dw, r, s)
+        c <- c + 1 if hit
     return c
 
 # Find the vertical scroll offset (rows) that best explains this frame vs the last emitted one.
@@ -317,50 +268,37 @@ def count_matches(dw: i32, dh: i32, d: i32) -> i32:
 def detect_shift(dw: i32, dh: i32) -> i32:
     best_count: mutable i32 = count_matches(dw, dh, 0)
     best_d: mutable i32 = 0
-    d: mutable i32 = -16
-    while d <= 16:
-        if d != 0:
-            c: i32 = count_matches(dw, dh, d)
-            if c > best_count:
-                best_count <- c
-                best_d <- d
-        d <- d + 1
-    if best_d != 0 and best_count >= dh * 7 / 10:
-        return best_d
-    return 0
+    for dd in 0..<33:
+        d: i32 = dd - 16
+        continue if d == 0
+        c: i32 = count_matches(dw, dh, d)
+        better: bool = c > best_count
+        best_count <- c if better
+        best_d <- d if better
+    return best_d if best_d != 0 and best_count >= dh * 7 / 10 else 0
 
 # Fill CHANGED[0..dh) given shift d; a row is "changed" if its shifted predecessor is out of
 # range (newly revealed) or differs cell-exact. Returns the count of changed rows.
 def mark_changed(dw: i32, dh: i32, d: i32) -> i32:
     c: mutable i32 = 0
-    r: mutable i32 = 0
-    while r < dh:
+    for r in 0..<dh:
         s: i32 = r - d
-        chg: mutable i32 = 1
-        if s >= 0 and s < dh:
-            if cur_prev_row_equal(dw, r, s) != 0:
-                chg <- 0
-        CHANGED[r.usize()] <- chg.u8()
-        if chg != 0:
-            c <- c + 1
-        r <- r + 1
+        unchanged: bool = s >= 0 and s < dh and cur_prev_row_equal(dw, r, s)
+        CHANGED[r.usize()] <- (0 if unchanged else 1).u8()
+        c <- c + 1 if not unchanged
     return c
 
 def copy_cur_to_prev(dw: i32, dh: i32) -> void:
-    n: i32 = dw * dh
-    i: mutable i32 = 0
-    while i < n:
-        PREV_GRID[i.usize()] <- CUR_GRID[i.usize()]
-        i <- i + 1
+    can Scalar:                                      # ~24KB byte copy per frame; scalar is fine
+        for i in 0..<(dw * dh):
+            PREV_GRID[i.usize()] <- CUR_GRID[i.usize()]
 
 # emit one CUR_GRID row (dw cells) + newline into TXT
 def txt_cur_row(dw: i32, r: i32) -> void:
     base: i32 = r * dw
-    k: mutable i32 = 0
-    while k < dw:
+    for k in 0..<dw:
         txt_byte(CUR_GRID[(base + k).usize()])
-        k <- k + 1
-    txt_byte(10u8)
+    txt_byte(10)
 
 # Stage a full self-contained keyframe (ASCII + COLOR) for frame idx into TXT.
 def stage_keyframe(idx: i32, base: i32, dw: i32, dh: i32, t_ms: i64) -> void:
@@ -369,21 +307,59 @@ def stage_keyframe(idx: i32, base: i32, dw: i32, dh: i32, t_ms: i64) -> void:
     txt_dec(idx.i64())
     txt_str(" t=")
     txt_dec(t_ms)
-    txt_byte(10u8)
+    txt_byte(10)
     txt_str("ASCII\n")
-    ay: mutable i32 = 0
-    while ay < dh:
+    for ay in 0..<dh:
         txt_cur_row(dw, ay)
-        ay <- ay + 1
     txt_str("COLOR\n")
-    cy: mutable i32 = 0
-    while cy < dh:
-        cx: mutable i32 = 0
-        while cx < dw:
+    for cy in 0..<dh:
+        for cx in 0..<dw:
             txt_byte(color_char(RING[(base + cy * dw + cx).usize()]))
-            cx <- cx + 1
-        txt_byte(10u8)
-        cy <- cy + 1
+        txt_byte(10)
+
+def emit_shift_line(d: i64) -> void:
+    txt_str("SHIFT dy=")
+    txt_dec(d)
+    txt_byte(10)
+
+# "ROWS a-b" header + the rows' content
+def emit_rows_block(dw: i32, a: i32, b: i32) -> void:
+    txt_str("ROWS ")
+    txt_dec(a.i64())
+    txt_byte(45)
+    txt_dec(b.i64())
+    txt_byte(10)
+    for rr in a..<(b + 1):
+        txt_cur_row(dw, rr)
+
+# Coalesce CHANGED[0..dh) into ROWS blocks and emit them. A single unchanged gap row between
+# two changed rows is swallowed into the block (fewer, chunkier blocks). Runs as a 3-state
+# scanner over the row index: Scan finds a block start, Grow(first, last) extends it (or eats
+# one gap), Emit(first, last) writes it. Returns the number of blocks emitted.
+def emit_changed_blocks(dw: i32, dh: i32) -> i32:
+    r: mutable i32 = 0
+    blocks: mutable i32 = 0
+    return machine from Coalesce.Scan decreases 3 * (dh - r) + 2:
+        Coalesce.Scan:
+            at_end: bool = r >= dh
+            row_changed: bool = (not at_end) and CHANGED[r.usize()] != 0
+            r <- r + 1
+            done blocks if at_end
+            next Coalesce.Grow(r - 1, r - 1) if row_changed
+            next Coalesce.Scan
+        Coalesce.Grow(first, last):
+            in_range: bool = r < dh
+            cur_changed: bool = in_range and CHANGED[r.usize()] != 0
+            gap: bool = in_range and (not cur_changed) and (r + 1) < dh and CHANGED[(r + 1).usize()] != 0
+            step: i32 = 1 if cur_changed or gap else 0
+            r <- r + step
+            next Coalesce.Grow(first, r - 1) if cur_changed
+            next Coalesce.Grow(first, last) if gap
+            next Coalesce.Emit(first, last)
+        Coalesce.Emit(first, last):
+            emit_rows_block(dw, first, last)
+            blocks <- blocks + 1
+            next Coalesce.Scan
 
 # Stage a delta frame (FRAME line + SAME | SHIFT + ROWS blocks) into TXT.
 # CHANGED[] must already be filled for shift `d`; `changed` is its count.
@@ -393,49 +369,23 @@ def stage_delta(idx: i32, dw: i32, dh: i32, t_ms: i64, d: i32, changed: i32) -> 
     txt_dec(idx.i64())
     txt_str(" t=")
     txt_dec(t_ms)
-    txt_byte(10u8)
-    if changed == 0:
-        txt_str("SAME\n")
-        return
-    if d != 0:
-        txt_str("SHIFT dy=")
-        txt_dec(d.i64())
-        txt_byte(10u8)
-    # coalesce changed rows into ROWS a-b blocks, swallowing single unchanged gaps
-    r: mutable i32 = 0
-    while r < dh:
-        if CHANGED[r.usize()] == 0u8:
-            r <- r + 1
-        else:
-            a: i32 = r
-            b: mutable i32 = r
-            k: mutable i32 = r + 1
-            while k < dh:
-                if CHANGED[k.usize()] != 0u8:
-                    b <- k
-                    k <- k + 1
-                else:
-                    if (k + 1) < dh and CHANGED[(k + 1).usize()] != 0u8:
-                        k <- k + 1                # swallow single unchanged gap row
-                    else:
-                        k <- dh                   # end of this block
-            txt_str("ROWS ")
-            txt_dec(a.i64())
-            txt_byte(45u8)                        # '-'
-            txt_dec(b.i64())
-            txt_byte(10u8)
-            rr: mutable i32 = a
-            while rr <= b:
-                txt_cur_row(dw, rr)
-                rr <- rr + 1
-            r <- b + 1
+    txt_byte(10)
+    txt_str("SAME\n") if changed == 0
+    return if changed == 0
+    emit_shift_line(d.i64()) if d != 0
+    _ = emit_changed_blocks(dw, dh)
+
+# Churn guard: past 60% changed rows a fresh keyframe is cheaper to state than to diff,
+# and it resyncs the reconstruction baseline.
+def frame_emit_kind(changed_rows: i32, dh: i32) -> FrameEmit:
+    return FrameEmit.Keyframe if changed_rows > dh * 6 / 10 else FrameEmit.Delta
 
 def write_latest(batch: i64) -> int:
     f: void&? = fopen(&LATEST_TMP[0], "wb".cast[u8&])
     if f is fp:
         txt_len <- 0
         txt_dec(batch)
-        txt_byte(10u8)
+        txt_byte(10)
         _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
         _ = fclose(fp)
         _ = rename(&LATEST_TMP[0], &LATEST_PATH[0])
@@ -443,150 +393,135 @@ def write_latest(batch: i64) -> int:
     return 0
 
 # Serialize a whole batch to <dir>/batch_<batch>.txt (atomic), update latest.txt, prune old.
-def write_batch_dir(dir: cstr, batch: i64, nframes: i32, dw: i32, dh: i32, fps: i32, cap_bytes: i32, retain: i32, tok: i32) -> int:
+def write_batch_dir(dir: cstr, batch0: i64, nframes: i32, dw: i32, dh: i32, fps: i32, cap_bytes: i32, retain: i32, tok: i32) -> int:
+    batch: i64 = batch0 if batch0 >= 0 else 0      # provable non-negative for the path builders
     build_num_path(&BATCH_PATH[0], &BATCH_TMP[0], dir, "/batch_", batch, ".txt")
     f: void&? = fopen(&BATCH_TMP[0], "wb".cast[u8&])
     if f is fp:
-        total: mutable i32 = 0
-        # header
-        txt_len <- 0
-        txt_str("BATCH ")
-        txt_dec(batch)
-        txt_str(" frames=")
-        txt_dec(nframes.i64())
-        txt_str(" ")
-        txt_dec(dw.i64())
-        txt_str("x")
-        txt_dec(dh.i64())
-        txt_str(" fps=")
-        txt_dec(fps.i64())
-        txt_str(" t0=")
-        txt_dec(FRAME_MS[0.usize()])
-        txt_str(" cap=")
-        txt_dec(tok.i64())
-        txt_byte(10u8)
-        _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
-        total <- total + txt_len
-        # frame 0 is always a keyframe
-        render_grid(0, dw, dh)
-        stage_keyframe(0, 0, dw, dh, FRAME_MS[0.usize()])
+        write_batch_to(fp, dir, batch, nframes, dw, dh, fps, cap_bytes, retain, tok)
+        return 1
+    return 0
+
+# Stage + write every section of one batch into an open file, swap it live, prune the oldest.
+def write_batch_to(fp: void&, dir: cstr, batch: i64, nframes: i32, dw: i32, dh: i32, fps: i32, cap_bytes: i32, retain: i32, tok: i32) -> void:
+    requires batch >= 0
+    total: mutable i32 = 0
+    # header
+    txt_len <- 0
+    txt_str("BATCH ")
+    txt_dec(batch)
+    txt_str(" frames=")
+    txt_dec(nframes.i64())
+    txt_str(" ")
+    txt_dec(dw.i64())
+    txt_str("x")
+    txt_dec(dh.i64())
+    txt_str(" fps=")
+    txt_dec(fps.i64())
+    txt_str(" t0=")
+    txt_dec(FRAME_MS[0.usize()])
+    txt_str(" cap=")
+    txt_dec(tok.i64())
+    txt_byte(10)
+    _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
+    total <- total + txt_len
+    # frame 0 is always a keyframe
+    render_grid(0, dw, dh)
+    stage_keyframe(0, 0, dw, dh, FRAME_MS[0.usize()])
+    _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
+    total <- total + txt_len
+    copy_cur_to_prev(dw, dh)
+    emitted: mutable i32 = 1
+    changed_total: mutable i32 = 0
+    emit_every: mutable i32 = 1
+    for i in 1..<nframes:
+        is_last: bool = i == nframes - 1
+        # degrade: past the cap, drop frames (baseline unchanged so the stream stays decodable)
+        skip: bool = emit_every > 1 and (not is_last) and (i % emit_every) != 0
+        continue if skip
+        base: i32 = i * RING_STRIDE
+        render_grid(base, dw, dh)
+        d: i32 = detect_shift(dw, dh)
+        cr: i32 = mark_changed(dw, dh, d)
+        match frame_emit_kind(cr, dh):
+            FrameEmit.Keyframe:
+                stage_keyframe(i, base, dw, dh, FRAME_MS[i.usize()])
+            FrameEmit.Delta:
+                stage_delta(i, dw, dh, FRAME_MS[i.usize()], d, cr)
         _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
         total <- total + txt_len
         copy_cur_to_prev(dw, dh)
-        emitted: mutable i32 = 1
-        changed_total: mutable i32 = 0
-        emit_every: mutable i32 = 1
-        i: mutable i32 = 1
-        while i < nframes:
-            is_last: mutable i32 = 0
-            if i == nframes - 1:
-                is_last <- 1
-            skip: mutable i32 = 0
-            if emit_every > 1 and is_last == 0 and (i % emit_every) != 0:
-                skip <- 1                          # degrade: drop this frame (baseline unchanged)
-            if skip == 0:
-                base: i32 = i * RING_STRIDE
-                render_grid(base, dw, dh)
-                d: i32 = detect_shift(dw, dh)
-                cr: i32 = mark_changed(dw, dh, d)
-                if cr > dh * 6 / 10:               # churn guard: cheaper to restate than diff
-                    stage_keyframe(i, base, dw, dh, FRAME_MS[i.usize()])
-                else:
-                    stage_delta(i, dw, dh, FRAME_MS[i.usize()], d, cr)
-                _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
-                total <- total + txt_len
-                copy_cur_to_prev(dw, dh)
-                emitted <- emitted + 1
-                changed_total <- changed_total + cr
-                if total > cap_bytes and emit_every < 4:
-                    emit_every <- emit_every * 2   # over budget: halve the emit rate
-            i <- i + 1
-        # trailer
-        txt_len <- 0
-        txt_str("BATCH_END emitted=")
-        txt_dec(emitted.i64())
-        txt_str(" changed_rows=")
-        txt_dec(changed_total.i64())
-        txt_str(" bytes=")
-        txt_dec(total.i64())
-        txt_str(" rate=")
-        txt_dec(emit_every.i64())
-        txt_byte(10u8)
-        _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
-        _ = fclose(fp)
-        _ = rename(&BATCH_TMP[0], &BATCH_PATH[0])
-        _ = write_latest(batch)
-        # prune the batch that just fell out of the retention window
-        if batch - retain.i64() >= 0:
-            build_num_path(&PRUNE_PATH[0], &PRUNE_TMP[0], dir, "/batch_", batch - retain.i64(), ".txt")
-            _ = remove(&PRUNE_PATH[0])
-        return 1
-    return 0
+        emitted <- emitted + 1
+        changed_total <- changed_total + cr
+        # over budget: halve the emit rate
+        emit_every <- emit_every * 2 if total > cap_bytes and emit_every < 4
+    # trailer
+    txt_len <- 0
+    txt_str("BATCH_END emitted=")
+    txt_dec(emitted.i64())
+    txt_str(" changed_rows=")
+    txt_dec(changed_total.i64())
+    txt_str(" bytes=")
+    txt_dec(total.i64())
+    txt_str(" rate=")
+    txt_dec(emit_every.i64())
+    txt_byte(10)
+    _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
+    _ = fclose(fp)
+    _ = rename(&BATCH_TMP[0], &BATCH_PATH[0])
+    _ = write_latest(batch)
+    prune_batch(dir, batch - retain.i64())
+
+# Delete the batch file that just fell out of the retention window (no-op before it fills).
+def prune_batch(dir: cstr, old: i64) -> void:
+    return if old < 0
+    build_num_path(&PRUNE_PATH[0], &PRUNE_TMP[0], dir, "/batch_", old, ".txt")
+    _ = remove(&PRUNE_PATH[0])
+
+def fail(msg: cstr) -> int:
+    _ = printf(msg.cast[u8&])
+    return 1
 
 def main(argc: int, argv: u8&&) -> int:
     requires argc >= 0
     dir: mutable cstr = "/tmp/screen_batches"
-    if argc >= 2:
-        dir <- argv[1].cast[cstr]
-    _ = mkdir(dir.cast[u8&], 493u32)               # 0o755; ignore EEXIST
+    dir <- argv[1].cast[cstr] if argc >= 2
+    _ = mkdir(dir.cast[u8&], 493)                  # 0o755; ignore EEXIST
     build_named_path(&LATEST_PATH[0], &LATEST_TMP[0], dir, "latest.txt")
 
     out_w: mutable i32 = 192
-    if argc >= 3:
-        out_w <- atoi(argv[2]).i32()
-    if out_w < 8:
-        out_w <- 8
-    if out_w > MAX_OUT_W:
-        out_w <- MAX_OUT_W
+    out_w <- atoi(argv[2]).i32() if argc >= 3
+    out_w <- 8 if out_w < 8
+    out_w <- MAX_OUT_W if out_w > MAX_OUT_W
     fps: mutable i32 = 24
-    if argc >= 4:
-        fps <- atoi(argv[3]).i32()
-    if fps < 1:
-        fps <- 1
-    if fps > 60:
-        fps <- 60
+    fps <- atoi(argv[3]).i32() if argc >= 4
+    fps <- 1 if fps < 1
+    fps <- 60 if fps > 60
     n_seconds: mutable i32 = 3
-    if argc >= 5:
-        n_seconds <- atoi(argv[4]).i32()
-    if n_seconds < 1:
-        n_seconds <- 1
+    n_seconds <- atoi(argv[4]).i32() if argc >= 5
+    n_seconds <- 1 if n_seconds < 1
     token_cap: mutable i32 = 40000
-    if argc >= 6:
-        token_cap <- atoi(argv[5]).i32()
-    if token_cap < 2000:
-        token_cap <- 2000
+    token_cap <- atoi(argv[5]).i32() if argc >= 6
+    token_cap <- 2000 if token_cap < 2000
     retain: mutable i32 = 40
-    if argc >= 7:
-        retain <- atoi(argv[6]).i32()
-    if retain < 1:
-        retain <- 1
+    retain <- atoi(argv[6]).i32() if argc >= 7
+    retain <- 1 if retain < 1
 
-    if screencap_start() == 0:
-        _ = printf("frame_dump: cannot start capture (Screen Recording permission?)\n".cast[u8&])
-        return 1
-    if screencap_wait_first_frame() == 0:
-        _ = printf("frame_dump: no frames arrived\n".cast[u8&])
-        return 1
+    fail("frame_dump: cannot start capture (Screen Recording permission?)\n") return if screencap_start() == 0
+    fail("frame_dump: no frames arrived\n") return if screencap_wait_first_frame() == 0
     sw: i32 = screencap_w()
     sh: i32 = screencap_h()
-    if sw * sh > GRAB_CAP:
-        _ = printf("frame_dump: display too large\n".cast[u8&])
-        return 1
+    fail("frame_dump: display too large\n") return if sw * sh > GRAB_CAP
     screencap_log_dims()
     screencap_install_sigint()
 
     out_h: mutable i32 = out_w * sh / sw
-    if out_h < 8:
-        out_h <- 8
-    if out_h > 256:
-        out_h <- 256                               # CHANGED[]/row arrays are 256 deep
-    if out_w * out_h > RING_STRIDE:
-        out_h <- RING_STRIDE / out_w
+    out_h <- 8 if out_h < 8
+    out_h <- 256 if out_h > 256                    # CHANGED[]/row arrays are 256 deep
+    out_h <- RING_STRIDE / out_w if out_w * out_h > RING_STRIDE
 
-    batch_frames: mutable i32 = fps * n_seconds
-    if batch_frames > MAX_BATCH_FRAMES:
-        batch_frames <- MAX_BATCH_FRAMES           # 24fps caps n_seconds at ~10
-
+    # 24fps caps n_seconds at ~10
+    batch_frames: i32 = fps * n_seconds if fps * n_seconds <= MAX_BATCH_FRAMES else MAX_BATCH_FRAMES
     cap_bytes: i32 = token_cap * 4                 # ~4 bytes/token for this content
 
     _ = printf("frame_dump: delta-encoded batches -> directory. Ctrl-C to stop.\n".cast[u8&])
@@ -598,19 +533,19 @@ def main(argc: int, argv: u8&&) -> int:
         i: mutable i32 = 0
         next_ms: mutable i64 = screencap_now_ms()
         while i < batch_frames and screencap_should_stop() == 0:
+            # pacing: sleep until this frame's deadline, then advance the deadline
             now: mutable i64 = screencap_now_ms()
             while now < next_ms:
                 _ = usleep(((next_ms - now) * 1000).u32())
                 now <- screencap_now_ms()
-            ok: int = screencap_grab(&SCREEN_GRAB[0], GRAB_CAP)
-            if ok != 0:
-                downscale_into(&SCREEN_GRAB[0], sw, sh, out_w, out_h, i * RING_STRIDE)
-                FRAME_MS[i.usize()] <- screencap_now_ms() - start_ms
-                i <- i + 1
             next_ms <- next_ms + frame_interval_ms
-        if i > 0:
-            _ = write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap)
-            batch <- batch + 1
+            continue if screencap_grab(&SCREEN_GRAB[0], GRAB_CAP) == 0
+            downscale_into(&SCREEN_GRAB[0], sw, sh, out_w, out_h, i * RING_STRIDE)
+            FRAME_MS[i.usize()] <- screencap_now_ms() - start_ms
+            i <- i + 1
+        continue if i == 0
+        _ = write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap)
+        batch <- batch + 1
     screencap_stop()
     _ = printf("frame_dump: stopped.\n".cast[u8&])
     return 0
