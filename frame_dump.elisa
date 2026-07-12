@@ -126,12 +126,6 @@ enum Activity:
     Video
     Switching
 
-# Row-coalescing scanner states for stage_delta (see emit_changed_blocks).
-enum Coalesce:
-    Scan
-    Grow(i32, i32)
-    Emit(i32, i32)
-
 # ---- small text/number helpers into TXT ----
 
 def txt_byte(b: u8) -> void:
@@ -358,27 +352,30 @@ def emit_rows_block(dw: i32, a: i32, b: i32) -> void:
 # scanner over the row index: Scan finds a block start, Grow(first, last) extends it (or eats
 # one gap), Emit(first, last) writes it. Returns the number of blocks emitted.
 def emit_changed_blocks(dw: i32, dh: i32) -> i32:
-    return machine from Coalesce.Scan |r: i32 = 0, blocks: i32 = 0| decreases 3 * (dh - r) + 2:
-        Coalesce.Scan:
+    state Scan                          # looking for a block start
+    state Grow(first: i32, last: i32)   # extending the current block (or eating one gap row)
+    state Emit(first: i32, last: i32)   # writing the finished block
+    return start Scan |r: i32 = 0, blocks: i32 = 0| decreases 3 * (dh - r) + 2:
+        Scan:
             at_end: bool = r >= dh
             row_changed: bool = (not at_end) and CHANGED[r.usize()] != 0
             r <- r + 1
             done blocks if at_end
-            next Coalesce.Grow(r - 1, r - 1) if row_changed
-            next Coalesce.Scan
-        Coalesce.Grow(first, last):
+            next Grow(r - 1, r - 1) if row_changed
+            next Scan
+        Grow(first, last):
             in_range: bool = r < dh
             cur_changed: bool = in_range and CHANGED[r.usize()] != 0
             gap: bool = in_range and (not cur_changed) and (r + 1) < dh and CHANGED[(r + 1).usize()] != 0
             step: i32 = 1 if cur_changed or gap else 0
             r <- r + step
-            next Coalesce.Grow(first, r - 1) if cur_changed
-            next Coalesce.Grow(first, last) if gap
-            next Coalesce.Emit(first, last)
-        Coalesce.Emit(first, last):
+            next Grow(first, r - 1) if cur_changed
+            next Grow(first, last) if gap
+            next Emit(first, last)
+        Emit(first, last):
             emit_rows_block(dw, first, last)
             blocks <- blocks + 1
-            next Coalesce.Scan
+            next Scan
 
 # Stage a delta frame (FRAME line + SAME | SHIFT + ROWS blocks) into TXT.
 # CHANGED[] must already be filled for shift `d`; `changed` is its count.
