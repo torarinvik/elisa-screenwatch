@@ -77,19 +77,38 @@ def draw_digit(cx: i32, cy: i32, scale: i32, d: i32, fg: u32) -> void:
 
 # ---- scenes ------------------------------------------------------------------------------------
 
-# counter: a single large digit, centred, showing floor(t/2000) clamped 0..9. Identical within each
-# 2s phase (SAME frames), stepping at each phase boundary. Matches eval/scenarios/one-digit-counter.
-def scene_counter(t_ms: i64) -> void:
+# The trap sequence for counter-skip: NOT monotonic (positions 3 and 7 are swapped). A watcher that
+# infers "digit = batch index" instead of READING the grid answers wrong exactly at batches 3 and 7.
+global mutable SEQ_SKIP: array[u8, 10] = [0, 1, 2, 7, 4, 5, 6, 3, 8, 9]
+
+# t -> batch index (2s batches, clamped 0..9)
+def batch_of(t_ms: i64) -> i32:
+    b: mutable i32 = (t_ms / 2000).i32()
+    b <- 9 if b > 9
+    return b
+
+# One centred large digit on a dark background (identical within a 2s phase -> SAME frames).
+def draw_center_digit(d: i32) -> void:
     fill_bg(2105376)                      # 0x00202020 dark grey
-    d: mutable i32 = (t_ms / 2000).i32()
-    d <- 9 if d > 9
     scale: i32 = 36
     cx: i32 = SG_W / 2 - (5 * scale) / 2
     cy: i32 = SG_H / 2 - (7 * scale) / 2
     draw_digit(cx, cy, scale, d, 15790320)    # 0x00F0F0F0 near-white
 
-def render_scene(scene: u8&, t_ms: i64) -> void:
-    scene_counter(t_ms)                   # only scene for now; dispatch added per new scene
+# counter: digit = batch index (a clean 0..9). Matches eval/scenarios/one-digit-counter.
+def scene_counter(t_ms: i64) -> void:
+    draw_center_digit(batch_of(t_ms))
+
+# counter-skip: digit = SEQ_SKIP[batch] (the pattern breaks at batches 3 and 7). Matches
+# eval/scenarios/counter-skip. This is the test of perceiving-vs-guessing.
+def scene_counter_skip(t_ms: i64) -> void:
+    draw_center_digit(SEQ_SKIP[batch_of(t_ms).usize()].i32())
+
+def render_scene(scene_id: i32, t_ms: i64) -> void:
+    if scene_id == 1:
+        scene_counter_skip(t_ms)
+    else:
+        scene_counter(t_ms)
 
 # ---- driver ------------------------------------------------------------------------------------
 
@@ -101,8 +120,9 @@ def main(argc: int, argv: u8&&) -> int:
     fps: i32 = clamp_i32(arg_i32(argc, argv, 4, 10), 1, 60)
     dur_ms: i64 = at_least(arg_i32(argc, argv, 5, 20000), 1000).i64()
 
-    if not sg_streq(scene, "counter"):
-        _ = printf("scenegen: unknown scene (have: counter)\n".cast[u8&])
+    scene_id: i32 = 0 if sg_streq(scene, "counter") else (1 if sg_streq(scene, "counter-skip") else -1)
+    if scene_id < 0:
+        _ = printf("scenegen: unknown scene (have: counter, counter-skip)\n".cast[u8&])
         return 2
 
     _ = mkdir(dir.cast[u8&], 493)
@@ -126,7 +146,7 @@ def main(argc: int, argv: u8&&) -> int:
         i: mutable i32 = 0
         while i < batch_frames and f < total:
             t_ms: i64 = f.i64() * frame_interval_ms
-            render_scene(scene, t_ms)
+            render_scene(scene_id, t_ms)
             archive_frame(&SCREEN_GRAB[0], SG_W, SG_H, t_ms)
             downscale_into(&SCREEN_GRAB[0], SG_W, SG_H, out_w, out_h, i * RING_STRIDE)
             write_frame_ppm(dir, batch, SG_W, SG_H) if i == 0

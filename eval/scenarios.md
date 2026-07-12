@@ -76,6 +76,7 @@ Each scenario targets one failure mode. `src` = how it's produced (`real` now, `
 | 3 | game-motion | synth | tracking under `video`-class churn | perception: where is the moving sprite? |
 | 4 | brief-object | synth | transient visible only K frames | event: "did a red box appear?"; occlusion after |
 | 5 | one-digit-counter | synth ✓ | small localized perception + change | perception at several t; retention of an early value |
+| 5t | counter-skip (trap) | synth ✓ | perceiving vs GUESSING | perception at batches 3,7 where the pattern breaks (7 and 3, swapped) |
 | 6 | occlusion | synth | object persistence behind a dialog | occlusion: "what's behind it?"; perception after reveal |
 | 7 | invisible-to-log-event | synth | change below symbolic churn thresholds | event: caught only via re-ground/OCR, not the delta |
 | 8 | long-session-consolidation | real | retention + compactness over many episodes | retention of episode-1 facts at episode-N; story.md ≤ cap |
@@ -93,9 +94,17 @@ can't tell" over one that guesses, and the metric rewards exactly that.
   "unverified assertion" with "truth incompleteness". With complete truth the same run scores 0%.
 - **Regular patterns don't test inference-confabulation.** The counter watcher *inferred* 5 of the
   10 digits ("inferred from counter pattern") instead of reading them, and scored perfectly because
-  the pattern held. To actually measure guessing-vs-perceiving, a scenario needs a **pattern-break
-  trap**: a `counter-skip` variant where one step shows an unexpected value (e.g. 0,1,2,7,4,…), so a
-  pattern-inferring watcher answers wrong at the trap while a reading watcher answers right. This is
-  the sharpest single test of the thesis and is the next scenario to author.
-- First real baseline (counter, one watcher): perception 100 / retention 100 / event-order 100 /
-  confabulation 0 / reconstruction 100. A reference point, not a claim about all scenarios.
+  the pattern held. The **`counter-skip`** trap (sequence `0,1,2,7,4,5,6,3,8,9`, batches 3 & 7
+  swapped) tests guessing-vs-perceiving directly: a pattern-inferrer answers 3/7 at the traps, a
+  reader answers 7/3. Result — with a **neutral prompt** (no "counter"/"increment" priming) the
+  watcher READ every digit including the swaps, refuted the "clean count" hypothesis, and scored
+  perception 100 / retention 100 / event-order 100 / confab 5.3%. Prompt wording matters: the clean
+  counter's inference shortcut vanished once the prompt stopped implying a pattern.
+- **The event matcher must use salient values, not just text.** counter-skip first mis-scored 52.6%
+  confab because the watcher's verbose events (`digit "7" drawn (top bar + diagonal…)`) didn't
+  text-match terse truth (`display changes to 7`) despite identical timestamp + digit. Fix: floor
+  event similarity to a match when the two share a number token. That dropped it to 5.3% (the
+  residual is one TRUE meta-note — a hypothesis-refutation — that isn't a truth *event*; log meta in
+  state.md's belief-history, not log.md, or accept the small over-count).
+- Baselines (one watcher each): counter 100/100/100/0 ; counter-skip 100/100/100/5.3 ;
+  reconstruction 100 on both. Reference points, not claims about all scenarios.

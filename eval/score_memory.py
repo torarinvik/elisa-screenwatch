@@ -106,13 +106,21 @@ def parse_log_events(path):
 def _tokens(s):
     return set(re.findall(r"[a-z0-9]+", _norm(s)))
 
+def _nums(s):
+    return set(re.findall(r"\d+", str(s)))
+
 def _sim(a, b):
     ta, tb = _tokens(a), _tokens(b)
     if not ta or not tb:
         return 0.0
     j = len(ta & tb) / len(ta | tb)
     r = difflib.SequenceMatcher(None, _norm(a), _norm(b)).ratio()
-    return max(j, r)
+    s = max(j, r)
+    # events carry salient values (a digit, a count). A shared number is a strong identity signal
+    # that terse-vs-verbose phrasing hides from pure text similarity — floor the score when present.
+    if _nums(a) & _nums(b):
+        s = max(s, 0.6)
+    return s
 
 def match_events(log_events, truth_events, window_ms, sim_th):
     """Greedy best-match each log event to a truth event within a time window. Returns

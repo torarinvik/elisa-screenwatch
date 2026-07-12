@@ -1,0 +1,30 @@
+{"type":"phase","t0":0,"t1":2000,"label":"shows 0","activity":"still"}
+{"type":"phase","t0":2000,"t1":4000,"label":"shows 1","activity":"still"}
+{"type":"phase","t0":4000,"t1":6000,"label":"shows 2","activity":"still"}
+{"type":"phase","t0":6000,"t1":8000,"label":"shows 7","activity":"still"}
+{"type":"phase","t0":8000,"t1":10000,"label":"shows 4","activity":"still"}
+{"type":"phase","t0":10000,"t1":12000,"label":"shows 5","activity":"still"}
+{"type":"phase","t0":12000,"t1":14000,"label":"shows 6","activity":"still"}
+{"type":"phase","t0":14000,"t1":16000,"label":"shows 3","activity":"still"}
+{"type":"phase","t0":16000,"t1":18000,"label":"shows 8","activity":"still"}
+{"type":"phase","t0":18000,"t1":20000,"label":"shows 9","activity":"still"}
+{"type":"fact","t0":0,"t1":2000,"key":"digit","value":"0"}
+{"type":"fact","t0":2000,"t1":4000,"key":"digit","value":"1"}
+{"type":"fact","t0":4000,"t1":6000,"key":"digit","value":"2"}
+{"type":"fact","t0":6000,"t1":8000,"key":"digit","value":"7"}
+{"type":"fact","t0":8000,"t1":10000,"key":"digit","value":"4"}
+{"type":"fact","t0":10000,"t1":12000,"key":"digit","value":"5"}
+{"type":"fact","t0":12000,"t1":14000,"key":"digit","value":"6"}
+{"type":"fact","t0":14000,"t1":16000,"key":"digit","value":"3"}
+{"type":"fact","t0":16000,"t1":18000,"key":"digit","value":"8"}
+{"type":"fact","t0":18000,"t1":20000,"key":"digit","value":"9"}
+{"type":"event","t":0,"id":"e0","desc":"display appears showing 0","object":"o1"}
+{"type":"event","t":2000,"id":"e1","desc":"display changes to 1","object":"o1"}
+{"type":"event","t":4000,"id":"e2","desc":"display changes to 2","object":"o1"}
+{"type":"event","t":6000,"id":"e3","desc":"display changes to 7","object":"o1"}
+{"type":"event","t":8000,"id":"e4","desc":"display changes to 4","object":"o1"}
+{"type":"event","t":10000,"id":"e5","desc":"display changes to 5","object":"o1"}
+{"type":"event","t":12000,"id":"e6","desc":"display changes to 6","object":"o1"}
+{"type":"event","t":14000,"id":"e7","desc":"display changes to 3","object":"o1"}
+{"type":"event","t":16000,"id":"e8","desc":"display changes to 8","object":"o1"}
+{"type":"event","t":18000,"id":"e9","desc":"display changes to 9","object":"o1"}
