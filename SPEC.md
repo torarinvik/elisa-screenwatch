@@ -148,6 +148,28 @@ Execution: temporal → read the pointed batch range closely; spatial → read o
 rows of the keyframe grid; zoom → map rows to pixels (formula above), run
 `screenocr batch_<b>.jpg --crop ...`, read the strings.
 
+### Archive queries (`arch_tool`) — resolving evidence at exact-pixel fidelity
+
+The batch keyframe JPEG covers only the *retention window*. Once a batch is pruned, a claim's exact
+pixels survive only in the Tier-A ring, addressed by archive **seq** (not batch number). These verbs
+resolve `story.md` EVIDENCE pins and zoom queries against the ring, and are the pixel-truth backing
+for I2 (evidence stays randomly accessible backward):
+
+```
+arch_tool show    <dir> <seq> <out.ppm> [x y w h]   exact frame (optional full-res pixel crop)
+arch_tool replay  <dir> <s0> <s1> <stride> <pfx>    lossless replay of a span → <pfx><s>.ppm
+arch_tool compare <dir> <sA> <sB> [out.ppm]         exact pixel diff: prints changed count + bbox
+```
+
+- **OCR** over an archived frame = `arch_tool show … f.ppm` then `screenocr f.ppm --crop x,y,w,h`
+  (`screenocr` reads PPM directly). `arch-ocr.sh <dir> <seq> x,y,w,h` wraps the pair.
+- For a neural reader that needs to *see* a frame, convert the PPM once: `sips -s format png f.ppm
+  --out f.png`. Coordinates are full-res pixels; use SPEC.md's grid↔pixel formula to turn a grid
+  region into a crop.
+- `compare` answers "did region R change between t1 and t2?" at the pixel — the boss uses it to
+  confirm or refute a claimed change before it is consolidated. `changed=0` proves two instants are
+  byte-identical; the bbox localises change without a neural read.
+
 Stopping rules (hard): <= 3 queries per escalation; an `evidence-exhausted`/`pruned` question
 is recorded under state.md's Unknown and never re-asked for the same event; introspective
 "do I understand?" is never a loop condition.

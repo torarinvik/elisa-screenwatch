@@ -32,7 +32,8 @@ and observe an unbounded stream while total memory stays compact — the point o
 | `frame_dump.elisa` | delta encoder + triage (the always-on symbolic member) |
 | `screencap.elisa` | ScreenCaptureKit bridge in pure Elisa (Obj-C runtime over FFI) |
 | `archive.elisa` | Tier A exact-frame ring: XOR-delta + LZFSE, checksummed, byte-capped |
-| `arch_tool.elisa` | archive verifier (`verify` = bit-exactness test) and frame extractor |
+| `arch_tool.elisa` | archive verifier + query engine: `verify` / `show` / `replay` / `compare` |
+| `arch-ocr.sh` | OCR an exact archived frame (resolve an evidence pin to positioned text) |
 | `screenasr.swift` | system-audio speech transcription (SpeechAnalyzer) — parked, ready |
 | `screenocr.swift` | Vision OCR CLI: positioned text, `--crop` region zoom |
 | `ocr_watch.sh` | eager OCR trigger on scene-change batches |
@@ -50,8 +51,11 @@ elisacore build frame-dump --project .
 ./frame_dump [out_dir] [width=192] [fps=24] [n_seconds=3] [token_cap=40000] [retain=40] [imgs=1] [arch_mb=2048]
 
 elisacore build arch-tool --project .
-./arch_tool verify /tmp/screen_batches          # prove the exact ring is bit-exact
-./arch_tool extract /tmp/screen_batches 20 f.ppm
+./arch_tool verify /tmp/screen_batches            # prove the exact ring is bit-exact
+./arch_tool show    /tmp/screen_batches 20 f.ppm  # decode frame 20 (add "x y w h" to crop)
+./arch_tool replay  /tmp/screen_batches 20 60 5 rp_   # lossless replay 20..60 step 5
+./arch_tool compare /tmp/screen_batches 20 40 d.ppm   # exact pixel diff: changed count + bbox
+./arch-ocr.sh       /tmp/screen_batches 20 0,0,600,120  # OCR an exact archived frame
 
 swiftc -O screenocr.swift -o screenocr
 ./ocr_watch.sh /tmp/screen_batches ./screenocr   # eager OCR loop (optional)
