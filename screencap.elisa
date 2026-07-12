@@ -82,7 +82,7 @@ struct BlockLiteral layout(c):
     descriptor: mutable void&?
 
 # ---- capacity: latest-frame staging buffer (BGRA, tightly packed) up to 24M px -----------------------
-global SC_STAGE_CAP_PX: i32 = 24000000
+const SC_STAGE_CAP_PX: i32 = 24000000
 global mutable g_stage: array[u8, 96000000] = zeroed
 
 global mutable g_msgSend: void&? = null
@@ -153,6 +153,7 @@ def m_blk(r: void&?, s: void&?, b: void&?) -> void:
         g_msgSend.call_as[fn(void&?, void&?, void&?) -> void](r, s, b)
 
 def iabs(x: i32) -> i32:
+    ensure result >= 0
     return -x if x < 0 else x
 def lock() -> void:
     trusted Unsafe.PointerCast:
@@ -272,6 +273,9 @@ def process_audio(sb: void&?) -> void:
 
 # motion energy vs the previous frame (still in g_stage), sparse 8x8 grid. Caller holds the lock.
 def accum_motion(bptr: u8&, w: i32, h: i32, bpr: usize) -> void:
+    requires w >= 0
+    requires h >= 0
+    requires w * h <= SC_STAGE_CAP_PX
     sad: mutable i64 = 0
     cntm: mutable i64 = 0
     y: mutable i32 = 0
@@ -293,6 +297,9 @@ def accum_motion(bptr: u8&, w: i32, h: i32, bpr: usize) -> void:
 
 # copy this frame (drop row padding) into the staging buffer. Caller holds the lock.
 def copy_rows(bptr: u8&, w: i32, h: i32, bpr: usize) -> void:
+    requires w >= 0
+    requires h >= 0
+    requires w * h <= SC_STAGE_CAP_PX
     rowbytes: usize = (w * 4).usize()
     for yy in 0..<h:
         trusted Unsafe.PointerCast:
