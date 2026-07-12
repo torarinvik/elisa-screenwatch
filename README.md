@@ -1,95 +1,65 @@
-# Comic Book Video — desktop screen recorder → comic-strip contact sheets
+# Elisa Screen-Understanding Orchestra
 
-Records the live macOS screen into "comic book" contact-sheet PNGs: each captured frame is
-box-downscaled into a panel, panels tile into a grid "page", every panel gets a burned-in capture
-number + timestamp, and full pages are written as PNGs plus a sidecar CSV. Reading one page lets a
-vision model reconstruct on-screen motion the way a comic strip conveys action across panels.
+Turns the live macOS screen into a stream an LLM can *watch*: a symbolic pipeline (Elisa + Swift)
+measures what changed and a small hierarchy of LLM agents interprets it. The design is an
+"orchestra" — cheap deterministic members do everything measurable; neural members only interpret,
+and each tier wakes the next on signal (see `SPEC.md`, the single source of truth for all
+interfaces).
 
-This is the Wolfenstein-3D comic recorder generalized off SDL — instead of being handed an in-memory
-SDL framebuffer, it grabs the real display each tick.
+## How it works
 
-## Layout
+`frame_dump` (Elisa, ScreenCaptureKit) captures the display and emits one **delta-encoded text
+batch** every few seconds: a full ASCII+color keyframe, then per-frame deltas (`SAME`, `SHIFT dy=n`
+for scrolls, `ROWS a-b` for changed rows), plus a `STATS` line and a symbolic `ACTIVITY` triage
+label (`still|typing|scrolling|video|switching`). A calm batch is ~15–20K tokens at 192-cell width —
+roughly 7× cheaper than full-frame dumps at 4× the resolution — and every frame is losslessly
+reconstructable. Each batch also gets a **full-res JPEG keyframe sidecar**, and `screenocr`
+(Swift/Vision) provides positioned text on demand, including `--crop` zooms for active perception.
 
-- `screencap.elisa` — ScreenCaptureKit capture driven **entirely from Elisa** (no Objective-C source file).
-  ScreenCaptureKit is an Obj-C framework, so this drives the Obj-C runtime over plain-C FFI: `objc_msgSend`
-  (address taken via `dlsym`, invoked per-call-site with `call_as` for the exact arm64 prototype),
-  `objc_allocateClassPair`/`class_addMethod` to build the `SCStreamOutput` delegate with an Elisa `@c_abi`
-  function as its IMP, and hand-assembled global blocks for the async completion handlers. It runs a
-  continuous `SCStream`, stages the latest frame behind an `os_unfair_lock`, computes per-frame motion
-  energy and system-audio RMS, and exposes the `screencap_*` API. `screencap_grab()` is a cheap memcpy, so
-  capture runs at ~45 fps. (CGDisplayCreateImage is obsoleted on macOS 15+, so SCK is the only path.)
-- `comic_capture.elisa` — project-agnostic comic pipeline (downscale/blit, annotation, hand-rolled PNG
-  encoder, CSV). Shared verbatim with the Wolf3D recorder.
-- `screen_recorder.elisa` — the `main` loop: grab → `comic_capture_rgb` → pace with `usleep` → flush.
+On top of the stream sit the neural members (`watcher_protocol.md`): a cheap **watcher** agent
+maintains a ≤2 KB rewritten `state.md` + append-only `log.md` (forced forgetting, evidence pointers
+back into the batch stream), and escalates to a **boss** agent that can dispatch zoom/OCR queries
+with a budget. Short-lived watchers inherit state and observe an unbounded stream without drift.
+
+## Files
+
+| File | Role |
+|---|---|
+| `frame_dump.elisa` | delta encoder + triage (the always-on symbolic member) |
+| `screencap.elisa` | ScreenCaptureKit bridge in pure Elisa (Obj-C runtime over FFI) |
+| `screenocr.swift` | Vision OCR CLI: positioned text, `--crop` region zoom |
+| `ocr_watch.sh` | eager OCR trigger on scene-change batches |
+| `SPEC.md` | system contracts: members, stream format v2, blackboard layout |
+| `watcher_protocol.md` | watcher/boss agent protocol (external memory, escalation) |
+| `eval/` | scoring harness: scripted-truth session + `score.py` |
 
 ## Build & run
 
+Requires the Elisa compiler (`elisacore`) and the Screen Recording TCC permission (ScreenCaptureKit
+prompts on first run).
+
 ```sh
-elisac build screen-rec --project .
-./screen_rec [out_prefix] [delay_ms] [cols] [rows] [panel_w] [panel_h] [max_frames]
+elisacore build frame-dump --project .
+./frame_dump [out_dir] [width=192] [fps=24] [n_seconds=3] [token_cap=40000] [retain=40]
+
+swiftc -O screenocr.swift -o screenocr
+./ocr_watch.sh /tmp/screen_batches ./screenocr   # eager OCR loop (optional)
 ```
 
-It records **continuously until you press Ctrl-C** (or until `max_frames`), streaming each page to disk
-the moment it fills, then flushing the partial last page on exit. Args (all optional, positional):
+Batches land in `/tmp/screen_batches/` (`batch_<n>.txt` + `batch_<n>.jpg`, `latest.txt` pointer,
+pruned to the retention window); the agent blackboard lives in `/tmp/screen_watch/`. Point a watcher
+agent at `watcher_protocol.md` to start observing.
 
-| arg | default | meaning |
-|---|---|---|
-| `out_prefix` | `/tmp/screen_comic_page` | page prefix → `<prefix>000.png`, `<prefix>_frames.csv` |
-| `delay_ms` | `-1` (motion-adaptive) | `<0` = capture on motion (see below); `>0` = fixed every N ms; `0` = max (~45 fps) |
-| `cols` `rows` | `3` `3` | panels per page grid (= 9 frames/page); max 12×12 |
-| `panel_w` `panel_h` | `440` `auto` | panel pixel size; `panel_h 0` = match screen aspect; max 1000×560 |
-| `max_frames` | `0` | stop after N frames (`0` = unlimited) |
+## Verifying
 
-**The defaults are tuned for an LLM watching the screen.** A 3×3 page comes out ~1344×876 (~1.18 MP) —
-right at the vision-input sweet spot (~1.15 MP / ~1568 px long edge), so the sheet is read ~1:1 with
-each panel still recognizable. Panel height auto-matches the captured screen's aspect ratio, so nothing
-is distorted.
+`eval/session_terminal.command` drives a scripted ground-truth session; `eval/score.py` aligns its
+phases against the recorded batches and scores the watcher's log. Reconstruction fidelity of the
+delta stream itself is lossless by construction (churn re-keyframes; dropped frames never update the
+baseline).
 
-**Motion-adaptive sampling (default).** Rather than a fixed frame rate, the SCStream's 60 fps frames are
-diffed on the bridge side (cheap sparse-grid motion energy), and a panel is captured only when the screen
-*changes*: as fast as ~7.5 fps during heavy activity (the `KF_MIN_MS` floor), and as slow as one frame
-per `KF_MAX_MS` (2.5 s heartbeat) when idle. This concentrates the limited panel budget on the moments
-that actually move — the decisive frames a fixed clock would miss between samples. Tunables live in
-`screen_recorder.elisa` (`KF_MIN_MS`, `KF_MAX_MS`, `KF_THRESH`). Pass a positive `delay_ms` for old-style
-fixed-rate instead.
+## History
 
-The CSV's `stamp_ms` is a real monotonic timeline (ms since recording started), so panels can be aligned
-to other timestamped streams.
-
-**Audio (native, cheap layer).** The same `SCStream` also captures system audio. Each buffer's RMS
-loudness (0–1000) is computed on the bridge side and (a) recorded per panel in the CSV — the `keymask`
-column carries the RMS level, the `keys` column carries a tag (`snd`/`loud`) — and (b) fed into the
-keyframe trigger, so a loud spike (an impact, a crowd surge) forces a capture even when the picture
-barely moved. This is the cheap real-time audio-event signal. Full ASR/transcription and a many-class
-audio-event classifier are deliberately *not* built in — they're external model integrations; the real
-monotonic timeline is the anchor they'd align to. Tunables: `KF_AUDIO_THRESH`, `AUDIO_LABEL_LOUD/SND`.
-
-Examples:
-- `./screen_rec` → motion-adaptive, watch-optimized 3×3 ~1.18 MP scenes, until Ctrl-C.
-- `./screen_rec /tmp/hi 0 10 10 760 428` → fixed **~8K (7666×4346) pages at ~45 fps** for fast motion.
-- `./screen_rec /tmp/demo 500 3 3 440 0 9` → fixed 2 fps, exactly one page then exit.
-
-Requires the **Screen Recording** permission (System Settings → Privacy & Security → Screen Recording);
-ScreenCaptureKit raises the prompt on first run.
-
-## Note on the Objective-C-from-Elisa port
-
-The whole bridge is Elisa — there is no `.m` file. This exercises the Obj-C runtime via FFI (see
-`screencap.elisa`). It also drove one compiler fix in Elisa-core: aggregates larger than 16 bytes passed
-or returned **by value** across the C ABI (e.g. `CMTime`, 24 bytes) now use the platform memory class
-(`sret` returns; arm64 indirect-pointer args / x86-64 `byval`). This applies only at the C-ABI boundary —
-`@c_abi` functions and `call_as` indirect calls — so Elisa's internal calling convention is unchanged.
-Calling a plain `extern` that returns such a struct by value is still unsupported; construct the struct in
-Elisa or go through `call_as` (as this code does for `setMinimumFrameInterval:`).
-
-## Resolution limits
-
-The page is assembled in one static RGB buffer and the PNG encoder uses 32-bit offset math, so the
-hard ceiling is ~716M pixels (≈26000² ). The practical ceiling is the buffer: `comic_capture.elisa`
-caps a page at 256 MB (`CC_MAX_PAGE_BYTES`) — enough for 12×12 @ 1000×560 ≈ a 12078×6798 sheet. Raise
-`CC_MAX_PAGE_BYTES`, the `page_rgb` array size, and the `CC_MAX_*` caps together to go larger.
-
-Source frames are captured at the display's **full backing-pixel (Retina) resolution** (resolved via
-`CGDisplayModeGetPixelWidth/Height`), so panels downscale from the sharpest available image. The source
-buffer caps at 24M px (`GRAB_CAP`), covering 4K/5K/6K displays. The recorder prints the captured source
-resolution at startup.
+This repo began as a "comic book" recorder (screen → PNG contact sheets of downscaled panels, the
+Wolf3D comic-capture pipeline generalized off SDL). The delta-encoded text stream + keyframe-sidecar
+system replaced it; the comic pipeline was removed (see git history — the living copy of
+`comic_capture.elisa` remains in the elisa-wolf3d repo).

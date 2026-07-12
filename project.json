@@ -1,14 +1,6 @@
 {
   "version": "1",
   "targets": {
-    "screen-rec": {
-      "entry": "screen_recorder.elisa",
-      "emit": "obj",
-      "run-emit": "obj",
-      "output": "screen_rec",
-      "opt": "3",
-      "link-flags": ["-lobjc", "-Wl,-framework,ScreenCaptureKit", "-Wl,-framework,CoreMedia", "-Wl,-framework,CoreVideo", "-Wl,-framework,CoreGraphics", "-Wl,-framework,AudioToolbox", "-Wl,-framework,Foundation"]
-    },
     "frame-dump": {
       "entry": "frame_dump.elisa",
       "emit": "obj",

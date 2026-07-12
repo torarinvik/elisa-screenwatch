@@ -626,6 +626,7 @@ def arg_i32(argc: int, argv: u8&&, idx: int, dflt: i32) -> i32:
     return atoi(argv[idx]).i32()
 
 def clamp_i32(v: i32, lo: i32, hi: i32) -> i32:
+    requires lo <= hi
     return lo if v < lo else (hi if v > hi else v)
 
 def at_least(v: i32, lo: i32) -> i32:

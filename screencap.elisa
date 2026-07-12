@@ -7,7 +7,7 @@
 # function as its IMP, and hand-assembled global blocks for the async completion handlers. All frame
 # and audio math (motion energy, RMS, BGRA->RGB) is plain Elisa calling the CoreMedia/CoreVideo C APIs.
 #
-# Public API used by screen_recorder.elisa / frame_dump.elisa:
+# Public API used by frame_dump.elisa:
 #   screencap_start / screencap_wait_first_frame / screencap_grab / screencap_w / screencap_h
 #   screencap_log_dims / screencap_stop / screencap_install_sigint / screencap_should_stop
 #   screencap_wait_keyframe / screencap_now_ms / screencap_audio_level / screencap_set_audio_trigger
