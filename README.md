@@ -17,9 +17,13 @@ reconstructable. Each batch also gets a **full-res JPEG keyframe sidecar**, and 
 (Swift/Vision) provides positioned text on demand, including `--crop` zooms for active perception.
 
 On top of the stream sit the neural members (`watcher_protocol.md`): a cheap **watcher** agent
-maintains a ≤2 KB rewritten `state.md` + append-only `log.md` (forced forgetting, evidence pointers
-back into the batch stream), and escalates to a **boss** agent that can dispatch zoom/OCR queries
-with a budget. Short-lived watchers inherit state and observe an unbounded stream without drift.
+maintains a **3-tier structured memory** — a ≤2 KB working set (`state.md`: typed OBSERVATIONS /
+OBJECTS / RELATIONS / HYPOTHESES, with stable object ids), an append-only episodic trace (`log.md`),
+and a consolidated semantic story (`story.md`) that a slow **consolidator** pass folds aged episodes
+into. Every tier forgets *representation* under a hard cap but keeps *evidence* pointers back into the
+batch stream (and, before pruning, into the exact Tier-A archive). A **boss** agent, woken only by
+escalations, dispatches budgeted zoom/OCR queries. Short-lived watchers inherit this external memory
+and observe an unbounded stream while total memory stays compact — the point of the whole design.
 
 ## Files
 

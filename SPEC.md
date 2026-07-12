@@ -11,6 +11,9 @@ A member may be rewritten freely; these contracts may only change with a version
 - **I4** Every stream section is ignorable by readers that don't know it (versioned, sectioned).
 - **I5** Attention pyramid: each tier wakes the next on signal only (plus the singer's slow heartbeat).
 - **I6** Every neural claim carries an evidence pointer; every re-watch is a specific question with a budget.
+- **I7** Memory is a 3-tier hierarchy (working `state.md` → episodic `log.md` → semantic `story.md`);
+  information only flows *down*, each tier has a hard size cap, and consolidation loses representation
+  but never invents. Object ids are stable and reused across tiers and watcher rotations.
 
 ## Members
 
@@ -33,10 +36,12 @@ A member may be rewritten freely; these contracts may only change with a version
   arch_<s>.bin / arch_<s>.idx   Tier A exact-frame ring (see "Archival fidelity tiers")
   latest.txt                    newest complete batch number
 
-/tmp/screen_watch/              the blackboard
+/tmp/screen_watch/              the blackboard (3-tier memory, I7)
   goal.md                       owner: user/boss — what matters right now
-  state.md                      owner: singer — REWRITTEN each cycle, <= 2 KB
-  log.md                        owner: singer(+boss consolidations) — APPEND-ONLY
+  state.md                      owner: singer — Tier 1 working mem, REWRITTEN each cycle, <= 2 KB
+  log.md                        owner: singer(+boss) — Tier 2 episodic trace, APPEND-ONLY
+  story.md                      owner: consolidator — Tier 3 semantic mem, rewritten on fold, <= 6 KB
+  log.archive.md                owner: consolidator — cold episodic events truncated from log.md
   escalation.md                 owner: singer — overwrite-style mailbox to the boss
   queries/q_<id>.md             owner: boss — one active-perception question
   queries/q_<id>.answer.md      owner: the dispatched sub-watcher
@@ -151,4 +156,5 @@ is recorded under state.md's Unknown and never re-asked for the same event; intr
 
 recorder (always) → triage (free, per batch) → OCR (scene-change batches only)
 → singer (event boundary or ~30s heartbeat; `still` batches cost ~zero tokens)
+→ consolidator (slow heartbeat or log.md past its line cap; folds Tier 2 → Tier 3)
 → boss (escalation.md changes only) → sub-watchers (bounded by query budgets).
