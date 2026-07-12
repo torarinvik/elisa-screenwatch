@@ -280,36 +280,33 @@ def cur_prev_row_equal(dw: i32, rc: i32, rp: i32) -> bool:
 
 # Count rows that match if the previous grid is shifted by d (predicted cur[r] = prev[r-d]).
 def count_matches(dw: i32, dh: i32, d: i32) -> i32:
-    matched: i32 =
-        for r in 0..<dh |c: i32 = 0| -> c:
-            s: i32 = r - d
-            hit: bool = s >= 0 and s < dh and cur_prev_row_equal(dw, r, s)
-            c <- c + 1 if hit
+    matched: i32 = for r in 0..<dh |c: i32 = 0| -> c:
+        s: i32 = r - d
+        hit: bool = s >= 0 and s < dh and cur_prev_row_equal(dw, r, s)
+        c <- c + 1 if hit
     return matched
 
 # Find the vertical scroll offset (rows) that best explains this frame vs the last emitted one.
 # Returns 0 (no scroll) unless some non-zero shift matches >=70% of rows and beats dy=0.
 def detect_shift(dw: i32, dh: i32) -> i32:
     base_count: i32 = count_matches(dw, dh, 0)          # dy=0 baseline to beat
-    best_count, best_d =
-        for dd in 0..<33 |best_count: i32 = base_count, best_d: i32 = 0| -> best_count, best_d:
-            d: i32 = dd - 16
-            continue if d == 0
-            c: i32 = count_matches(dw, dh, d)
-            better: bool = c > best_count
-            best_count <- c if better
-            best_d <- d if better
+    best_count, best_d = for dd in 0..<33 |best_count: i32 = base_count, best_d: i32 = 0| -> best_count, best_d:
+        d: i32 = dd - 16
+        continue if d == 0
+        c: i32 = count_matches(dw, dh, d)
+        better: bool = c > best_count
+        best_count <- c if better
+        best_d <- d if better
     return best_d if best_d != 0 and best_count >= dh * 7 / 10 else 0
 
 # Fill CHANGED[0..dh) given shift d; a row is "changed" if its shifted predecessor is out of
 # range (newly revealed) or differs cell-exact. Returns the count of changed rows.
 def mark_changed(dw: i32, dh: i32, d: i32) -> i32:
-    changed: i32 =
-        for r in 0..<dh |c: i32 = 0| -> c:
-            s: i32 = r - d
-            unchanged: bool = s >= 0 and s < dh and cur_prev_row_equal(dw, r, s)
-            CHANGED[r.usize()] <- (0 if unchanged else 1).u8()
-            c <- c + 1 if not unchanged
+    changed: i32 = for r in 0..<dh |c: i32 = 0| -> c:
+        s: i32 = r - d
+        unchanged: bool = s >= 0 and s < dh and cur_prev_row_equal(dw, r, s)
+        CHANGED[r.usize()] <- (0 if unchanged else 1).u8()
+        c <- c + 1 if not unchanged
     return changed
 
 def copy_cur_to_prev(dw: i32, dh: i32) -> void:
@@ -361,9 +358,7 @@ def emit_rows_block(dw: i32, a: i32, b: i32) -> void:
 # scanner over the row index: Scan finds a block start, Grow(first, last) extends it (or eats
 # one gap), Emit(first, last) writes it. Returns the number of blocks emitted.
 def emit_changed_blocks(dw: i32, dh: i32) -> i32:
-    r: mutable i32 = 0
-    blocks: mutable i32 = 0
-    return machine from Coalesce.Scan decreases 3 * (dh - r) + 2:
+    return machine from Coalesce.Scan |r: i32 = 0, blocks: i32 = 0| decreases 3 * (dh - r) + 2:
         Coalesce.Scan:
             at_end: bool = r >= dh
             row_changed: bool = (not at_end) and CHANGED[r.usize()] != 0
