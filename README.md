@@ -27,6 +27,9 @@ with a budget. Short-lived watchers inherit state and observe an unbounded strea
 |---|---|
 | `frame_dump.elisa` | delta encoder + triage (the always-on symbolic member) |
 | `screencap.elisa` | ScreenCaptureKit bridge in pure Elisa (Obj-C runtime over FFI) |
+| `archive.elisa` | Tier A exact-frame ring: XOR-delta + LZFSE, checksummed, byte-capped |
+| `arch_tool.elisa` | archive verifier (`verify` = bit-exactness test) and frame extractor |
+| `screenasr.swift` | system-audio speech transcription (SpeechAnalyzer) — parked, ready |
 | `screenocr.swift` | Vision OCR CLI: positioned text, `--crop` region zoom |
 | `ocr_watch.sh` | eager OCR trigger on scene-change batches |
 | `SPEC.md` | system contracts: members, stream format v2, blackboard layout |
@@ -40,7 +43,11 @@ prompts on first run).
 
 ```sh
 elisacore build frame-dump --project .
-./frame_dump [out_dir] [width=192] [fps=24] [n_seconds=3] [token_cap=40000] [retain=40]
+./frame_dump [out_dir] [width=192] [fps=24] [n_seconds=3] [token_cap=40000] [retain=40] [imgs=1] [arch_mb=2048]
+
+elisacore build arch-tool --project .
+./arch_tool verify /tmp/screen_batches          # prove the exact ring is bit-exact
+./arch_tool extract /tmp/screen_batches 20 f.ppm
 
 swiftc -O screenocr.swift -o screenocr
 ./ocr_watch.sh /tmp/screen_batches ./screenocr   # eager OCR loop (optional)

@@ -30,6 +30,7 @@ A member may be rewritten freely; these contracts may only change with a version
   batch_<n>.txt                 delta-encoded text chunk (stream format v2)
   batch_<n>.jpg                 full-res keyframe image (same instant as the text keyframe)
   batch_<n>.ocr.txt             OCR annotation (lazy or eager)
+  arch_<s>.bin / arch_<s>.idx   Tier A exact-frame ring (see "Archival fidelity tiers")
   latest.txt                    newest complete batch number
 
 /tmp/screen_watch/              the blackboard
@@ -89,6 +90,25 @@ y0 = cy * H / h      y1 = (cy+1) * H / h
 Rows a–b of the grid = pixel band `[a*H/h, (b+1)*H/h)`. The `batch_<n>.jpg` is captured from
 the same grab as the keyframe, so these coordinates are exact for the keyframe (and approximate
 for later frames in the batch).
+
+## Archival fidelity tiers
+
+The model stream (batches) is lossless at GRID resolution by construction. Source-resolution
+archival is tiered, and each tier states its guarantee honestly:
+
+- **Tier A — exact ring** (`archive.elisa`, inside the recorder): every grabbed full-res frame,
+  XOR-delta vs the previous frame + LZFSE, in segments of ~10s that each start with a keyframe
+  (independently decodable). Ring bounded by a byte cap (`frame_dump` arg 8, MB, default 2048,
+  0 = off); oldest segments pruned. **Bit-exactness is a TESTED property**: every index line
+  carries a checksum of the raw frame, and `arch_tool verify <dir>` re-decodes the whole live
+  ring and fails on any bit difference. `arch_tool extract <dir> <seq> <out.ppm>` recovers any
+  archived frame. Timestamps share the batch timeline (ms since recorder start).
+  Cost honesty: a calm screen keeps minutes-to-hours in the ring; full-screen video churn is
+  MBs/frame and shrinks the window — that is the price of "exact", by design.
+- **Tier B — high-fidelity, continuous** (planned): HEVC long-term recording. Labeled a
+  high-fidelity archive, NOT lossless.
+- **Tier C — evidence pinning** (planned): watcher/boss marks copy exact frames/crops out of the
+  Tier A ring before pruning, so consolidated memory keeps exact evidence pointers.
 
 ## screenocr CLI contract
 

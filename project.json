@@ -7,7 +7,15 @@
       "run-emit": "obj",
       "output": "frame_dump",
       "opt": "3",
-      "link-flags": ["-lobjc", "-Wl,-framework,ScreenCaptureKit", "-Wl,-framework,CoreMedia", "-Wl,-framework,CoreVideo", "-Wl,-framework,CoreGraphics", "-Wl,-framework,AudioToolbox", "-Wl,-framework,Foundation"]
+      "link-flags": ["-lobjc", "-lcompression", "-Wl,-framework,ScreenCaptureKit", "-Wl,-framework,CoreMedia", "-Wl,-framework,CoreVideo", "-Wl,-framework,CoreGraphics", "-Wl,-framework,AudioToolbox", "-Wl,-framework,Foundation"]
+    },
+    "arch-tool": {
+      "entry": "arch_tool.elisa",
+      "emit": "obj",
+      "run-emit": "obj",
+      "output": "arch_tool",
+      "opt": "3",
+      "link-flags": ["-lcompression"]
     }
   }
 }

@@ -51,8 +51,9 @@
 # Written for -Wflow-strict: decisions are values, guards, match arms, or machine transitions.
 
 include "./screencap.elisa"
+include "./archive.elisa"
 
-extern fopen(path: u8&, mode: u8&) -> void&?
+extern fopen(path: u8&, mode: u8&) -> heap void&?
 extern fwrite(ptr: u8&, size: usize, nmemb: usize, stream: void&) -> usize
 extern fclose(stream: void&) -> int
 extern rename(old: u8&, new: u8&) -> int
@@ -644,6 +645,7 @@ def main(argc: int, argv: u8&&) -> int:
     token_cap: i32 = at_least(arg_i32(argc, argv, 5, 40000), 2000)
     retain: i32 = at_least(arg_i32(argc, argv, 6, 40), 1)
     save_images: i32 = 1 if arg_i32(argc, argv, 7, 1) != 0 else 0
+    arch_mb: i32 = at_least(arg_i32(argc, argv, 8, 2048), 0)   # Tier A ring byte cap; 0 disables
 
     fail("frame_dump: cannot start capture (Screen Recording permission?)\n") return if screencap_start() == 0
     fail("frame_dump: no frames arrived\n") return if screencap_wait_first_frame() == 0
@@ -661,6 +663,7 @@ def main(argc: int, argv: u8&&) -> int:
     cap_bytes: i32 = token_cap * 4                 # ~4 bytes/token for this content
 
     _ = printf("frame_dump: delta-encoded batches -> directory. Ctrl-C to stop.\n".cast[u8&])
+    archive_init(dir, arch_mb)
     start_ms: i64 = screencap_now_ms()
     frame_interval_ms: i64 = (1000 / fps).i64()
     batch: mutable i64 = 0
@@ -676,6 +679,7 @@ def main(argc: int, argv: u8&&) -> int:
                 now <- screencap_now_ms()
             next_ms <- next_ms + frame_interval_ms
             continue if screencap_grab(&SCREEN_GRAB[0], GRAB_CAP) == 0
+            archive_frame(&SCREEN_GRAB[0], sw, sh, screencap_now_ms() - start_ms)   # Tier A exact ring
             downscale_into(&SCREEN_GRAB[0], sw, sh, out_w, out_h, i * RING_STRIDE)
             write_frame_ppm(dir, batch, sw, sh) if save_images == 1 and i == 0
             FRAME_MS[i.usize()] <- screencap_now_ms() - start_ms
@@ -683,6 +687,7 @@ def main(argc: int, argv: u8&&) -> int:
         continue if i == 0
         _ = write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap, save_images)
         batch <- batch + 1
+    archive_stop()
     screencap_stop()
     _ = printf("frame_dump: stopped.\n".cast[u8&])
     return 0

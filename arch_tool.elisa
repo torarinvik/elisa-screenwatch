@@ -1,0 +1,187 @@
+# arch_tool — decoder / verifier for the Tier A exact-frame ring (archive.elisa, SPEC.md).
+#
+#   arch_tool verify  <dir>                    re-decode EVERY live frame, recompute the checksum,
+#                                              compare against the capture-time checksum. Exit 0
+#                                              only if every frame is bit-exact.
+#   arch_tool extract <dir> <seq> <out.ppm>    decode frame <seq> and write it as a P6 PPM.
+#
+# This makes the archive's losslessness a tested property, not a claim: any bit difference between
+# the decoded frame and the frame that was grabbed fails verification.
+
+include "./archive.elisa"
+
+extern fopen(path: u8&, mode: u8&) -> heap void&?
+extern fread(ptr: mutable u8&, size: usize, nmemb: usize, stream: void&) -> usize
+extern fwrite(ptr: u8&, size: usize, nmemb: usize, stream: void&) -> usize
+extern fclose(stream: void&) -> int
+extern remove(path: u8&) -> int
+extern printf(fmt: u8&) -> int
+extern atoi(s: u8&) -> int
+
+global mutable IDXBUF: array[u8, 4194304] = zeroed
+global mutable idx_len: i64 = 0
+global mutable idx_pos: i64 = 0
+
+def streq(a: u8&, b: cstr) -> bool:
+    i: mutable i32 = 0
+    while a[i.usize()] != 0 and b[i.usize()] != 0:
+        false return if a[i.usize()] != b[i.usize()]
+        i <- i + 1
+    return a[i.usize()] == b[i.usize()]
+
+# parse the next decimal number in IDXBUF, skipping any non-digit separators
+def next_num() -> i64:
+    v: mutable i64 = 0
+    while idx_pos < idx_len and (IDXBUF[idx_pos.usize()] < 48 or IDXBUF[idx_pos.usize()] > 57):
+        idx_pos <- idx_pos + 1
+    while idx_pos < idx_len and IDXBUF[idx_pos.usize()] >= 48 and IDXBUF[idx_pos.usize()] <= 57:
+        v <- v * 10 + (IDXBUF[idx_pos.usize()] - 48).i64()
+        idx_pos <- idx_pos + 1
+    return v
+
+# Decode one payload (already in AR_ENC[0..plen]) into the running frame AR_PREV. Returns false on
+# a decode failure (corrupt payload / wrong length).
+def decode_into_prev(kind: i64, plen: i64, n: i32) -> bool:
+    bytes: usize = (n * 4).usize()
+    if kind == 0 or kind == 1:
+        got: mutable usize = 0
+        trusted Unsafe.PointerCast:
+            got <- compression_decode_buffer((&AR_XOR[0]).cast[u8&], bytes, &AR_ENC[0], plen.usize(), null, AR_LZFSE)
+        false return if got != bytes
+    else:
+        false return if plen != bytes.i64()
+        trusted Unsafe.PointerCast:
+            src: u32& = (&AR_ENC[0]).cast[u32&]
+            i: mutable i32 = 0
+            while i < n:
+                AR_XOR[i.usize()] <- src[i.usize()]
+                i <- i + 1
+    if kind == 0 or kind == 2:
+        i: mutable i32 = 0
+        while i < n:
+            AR_PREV[i.usize()] <- AR_XOR[i.usize()]
+            i <- i + 1
+    else:
+        i: mutable i32 = 0
+        while i < n:
+            AR_PREV[i.usize()] <- AR_PREV[i.usize()] ^ AR_XOR[i.usize()]
+            i <- i + 1
+    return true
+
+# Walk one segment. extract_seq >= 0: stop after decoding that frame (returns 1 if written).
+# extract_seq < 0: verify every frame; returns the number of MISMATCHED frames, or -1 if the
+# segment does not exist.
+def walk_seg(dir: cstr, seg: i64, extract_seq: i64, out_path: u8&) -> i64:
+    ar_path(dir, seg, ".idx")
+    xf0: void&? = fopen(&AR_PATH[0], "rb".cast[u8&])
+    bad: mutable i64 = 0
+    idx_len <- -1
+    if xf0 is xf:
+        idx_len <- fread(&IDXBUF[0], 1.usize(), 4194304.usize(), xf).i64()
+        _ = fclose(xf)
+    -1 return if idx_len < 0
+    idx_pos <- 0
+    ar_path(dir, seg, ".bin")
+    bf0: void&? = fopen(&AR_PATH[0], "rb".cast[u8&])
+    if bf0 is bf:
+        while idx_pos < idx_len:
+            seq: i64 = next_num()
+            t_ms: i64 = next_num()
+            kind: i64 = next_num()
+            plen: i64 = next_num()
+            w: i64 = next_num()
+            h: i64 = next_num()
+            hash_hi: i64 = next_num()
+            hash_lo: i64 = next_num()
+            break if w < 1 or h < 1 or w * h > AR_CAP_PX.i64() or plen < 1
+            got: usize = fread(&AR_ENC[0], 1.usize(), plen.usize(), bf)
+            break if got.i64() != plen
+            n: i32 = (w * h).i32()
+            ok: bool = decode_into_prev(kind, plen, n)
+            want: u64 = (hash_hi.u64() << 32) | hash_lo.u64()
+            good: bool = ok and ar_hash(&AR_PREV[0], n) == want
+            if not good:
+                bad <- bad + 1
+                _ = printf("arch_tool: frame FAILED verification\n".cast[u8&])
+            if extract_seq >= 0 and seq == extract_seq and good:
+                write_ppm(out_path, w.i32(), h.i32())
+                _ = fclose(bf)
+                return 1
+        _ = fclose(bf)
+        return bad
+    return -1
+
+def write_ppm(path: u8&, w: i32, h: i32) -> void:
+    return if w < 1 or h < 1 or w * h > AR_CAP_PX
+    f0: void&? = fopen(path, "wb".cast[u8&])
+    if f0 is f:
+        hdr: mutable array[u8, 64] = zeroed
+        off: mutable i32 = 0
+        off <- ar_put_str(&hdr[0], off, "P6\n")
+        off <- ar_put_num(&hdr[0], off, w.i64())
+        off <- ar_put_str(&hdr[0], off, " ")
+        off <- ar_put_num(&hdr[0], off, h.i64())
+        off <- ar_put_str(&hdr[0], off, "\n255\n")
+        _ = fwrite(&hdr[0], 1.usize(), off.usize(), f)
+        n: i32 = w * h
+        i: mutable i32 = 0
+        while i < n:
+            px: u32 = AR_PREV[i.usize()]
+            rgb: mutable array[u8, 3] = zeroed
+            rgb[0.usize()] <- ((px >> 16) & 255).u8()
+            rgb[1.usize()] <- ((px >> 8) & 255).u8()
+            rgb[2.usize()] <- (px & 255).u8()
+            _ = fwrite(&rgb[0], 1.usize(), 3.usize(), f)
+            i <- i + 1
+        _ = fclose(f)
+
+def main(argc: int, argv: u8&&) -> int:
+    requires argc >= 0
+    if argc < 3:
+        _ = printf("usage: arch_tool verify <dir> | arch_tool extract <dir> <seq> <out.ppm>\n".cast[u8&])
+        return 2
+    dir: cstr = argv[2].cast[cstr]
+
+    if streq(argv[1], "verify"):
+        seen: mutable i64 = 0
+        bad: mutable i64 = 0
+        seg: mutable i64 = 0
+        found: mutable i64 = 0
+        while seg < 100000:
+            r: i64 = walk_seg(dir, seg, -1, &AR_PATH[0])
+            if r >= 0:
+                found <- found + 1
+                seen <- seen + 1
+                bad <- bad + r
+            else:
+                break if found > 0                # past the live ring
+            seg <- seg + 1
+        if found == 0:
+            _ = printf("arch_tool: no segments found\n".cast[u8&])
+            return 2
+        if bad == 0:
+            _ = printf("arch_tool: verify OK — every decoded frame is bit-exact\n".cast[u8&])
+            return 0
+        _ = printf("arch_tool: verify FAILED\n".cast[u8&])
+        return 1
+
+    if streq(argv[1], "extract"):
+        if argc < 5:
+            _ = printf("usage: arch_tool extract <dir> <seq> <out.ppm>\n".cast[u8&])
+            return 2
+        want: i64 = atoi(argv[3]).i64()
+        seg: mutable i64 = 0
+        found: mutable i64 = 0
+        while seg < 100000:
+            r: i64 = walk_seg(dir, seg, want, argv[4])
+            if r == 1:
+                _ = printf("arch_tool: extracted\n".cast[u8&])
+                return 0
+            found <- found + 1 if r >= 0
+            break if r < 0 and found > 0
+            seg <- seg + 1
+        _ = printf("arch_tool: frame not found in the live ring\n".cast[u8&])
+        return 1
+
+    _ = printf("arch_tool: unknown command\n".cast[u8&])
+    return 2
