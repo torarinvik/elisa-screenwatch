@@ -317,6 +317,41 @@ long occlusion, textured background) and then walk it up the real-video tiers. E
 gated by the V1 scorer on seeded scenes; graduation is scored on held-out seeds AND one held-out
 video.
 
+> *A trustworthy tracker must know not only when identity is uncertain, but when the very
+> concept of a persistent physical object is inapplicable.*
+
+**Amended 2026-07-13** after the first pharo census (61 tracks / 51 VANISH / 43 OCCLUDED / 5
+fabricated conf=85 REVERSEs on a mostly-static IDE session) and an external research review
+(OC-SORT, ByteTrack, UCMCTrack/EMAP, MotionHalluc's Perceive-Parse-Verify). The census showed
+the deepest failure is UPSTREAM of association: the tracker interpreted text edits and UI
+redraws as physical objects in motion. Association repairs (V3.1–V3.2) make fabricated tracks
+fewer and better-argued — still fabricated. Hence V3.0 below, which must land FIRST: it is the
+constitution applied to the tracker itself — authority to make physical-object claims is earned
+per scene region by measured trackability, never granted globally.
+
+### V3.0 Trackability gate + minimal confidence split (applicability before association)
+
+- Before licensing any physical-motion claim (MOVE direction, REVERSE, identity-across-gap),
+  require **trackability evidence** for the component/region: persistence over several frames,
+  bounded centroid acceleration, stable area, low local split/merge frequency, an association
+  margin (best candidate clearly separated from alternatives), and scene-wide birth/death churn
+  below a threshold. Bass's ACTIVITY stats already carry most of the scene-level signal — this
+  is largely a viola-side read of evidence the orchestra already produces.
+- When the gate fails, the honest output is restraint, not a worse track:
+  `OBSERVED changed-regions ...` + `INFERRED activity_type=UI_CHANGE trackability=LOW` —
+  and NO object identity or REVERSE claim is admitted. `UNTRACKABLE` is a first-class verdict.
+- **Minimal confidence split moves here from V3.5** (pharo evidence: all four flung REVERSEs on
+  track 15 carried the same blended conf=85 — one scalar cannot express "detection certain,
+  association meaningless"). Three fields now, not six: `detection_quality`,
+  `association_margin`, `event_confidence`. V3.5 keeps the full decomposition + calibration.
+- Pre-work (do during V1, it is evidence-gathering not repair): inspect the pharo t=14.2–16.1s
+  window (batch 7–8 keyframes) and classify what UI event flung track 15 between cx=17/140/25/114.
+- Acceptance is annotation-free on pharo (no gold pulled forward from §7): count of
+  physical-motion claims, false-REVERSE count (a REVERSE inside an interval OCR shows as static
+  text is false by construction), track birth/death churn rate, abstention (`UNTRACKABLE`) rate,
+  and OCR/triage evidence retained despite tracker abstention. Full "fraction correctly
+  classified as UI activity" waits for the V3.6 ladder where gold-authoring is scheduled.
+
 ### V3.1 Velocity/direction freeze during OCCLUDED (smallest diff first)
 
 - `tracker.elisa` already has the OCCLUDED state and `TR_DIR/TR_EXT/TR_STARTX`. Change: while a
@@ -337,6 +372,12 @@ video.
   rule).
 - Candidates write into V2's supersession schema. A later contradiction (both candidates seen
   simultaneously) *disputes* the same-identity candidate — the first live supersession.
+- **Observation-centric backward re-update (ORU, from OC-SORT):** on tentative reacquisition,
+  recompute velocity from last-trusted-observation → new-observation (a virtual path over the
+  gap), never from merge-distorted coasted state. Crucially, ORU **proposes, it does not
+  decide**: backward consistency is one more `association_basis` raising a candidate's
+  confidence inside the DISPUTED set — only later corroboration (or held-out evaluation) lets
+  the identity graduate. An ambiguous reappearance is never silently turned into the original id.
 
 ### V3.2b Weak-component provisional tier (ByteTrack's insight, symbolically)
 
@@ -353,6 +394,13 @@ video.
 - Encoder currently detects vertical `SHIFT dy=`. Add horizontal: `SHIFT dx= dy=` (integer grid
   cells, detected by the same row/column-match scan transposed). Format bump is additive —
   `dy`-only lines remain valid; tracker parses both.
+- **Licensing note (2026-07-13):** pharo's `shifted=0` across all 30 batches is NOT evidence for
+  this — an IDE editing session plausibly contains no dominant global translation, and the
+  pharo failure was association across unrelated UI components, not uncorrected pan. 2-D
+  compensation is licensed by four dedicated seeded scenes: (1) pure horizontal scroll,
+  (2) diagonal scroll, (3) scroll + one independently moving object, (4) local panel scroll
+  with the rest of the screen fixed. Compensate-then-segment (the fix runs BEFORE residual
+  segmentation, V3.4), not detect-then-veto.
 - **Affine is explicitly deferred** until integer 2-D translation measurably fails on an R1
   fixture (the debate's earn-your-complexity constraint; record the trigger condition here:
   "an R1/R2 fixture where per-frame residual after best integer translation still touches
@@ -374,6 +422,19 @@ video.
 - Separate confidences on detection (component quality: area, stability), association (gate
   margin), and event interpretation (VANISH vs OCCLUDED alternatives) instead of one blended
   number. These feed the V1.8 calibration report — measured, not asserted.
+- The minimal 3-field split ships in V3.0; this milestone completes the decomposition
+  (adds `trackability`, `identity_confidence`, `motion_measurement_quality`) and calibrates it.
+
+### V3.5b Typed Perceive-Parse-Verify (claim verification as a tool interface)
+
+- When a model (violin/sax/frontier) makes a natural-language motion claim ("the glove reversed
+  after contact"), it is verified by proposing a **typed query** against the ledger — e.g.
+  `verify_reverse(track_id, interval, required_prior_event, max_delay_ms)` — whose fields the
+  runtime validates and executes via the existing `track_probe.py` op vocabulary (reversal,
+  vanish_gap, two_directions, ...). Verdicts: supported / contradicted / unresolved.
+- **The parse is itself an INFERRED claim** (which object? which interval? what counts as
+  "after"?) and carries that status in the ledger. No natural-language claim is admitted merely
+  because it parsed successfully — the constitution applies to the query, not just the answer.
 
 ### V3.6 The real-video ladder (run in this order, gold per §7)
 
@@ -382,7 +443,10 @@ video.
    reversal probes ≥ 80%; every miss documented with a frame pin.
 2. **`pharo` (R1):** NOT an object-tracking exam — a triage+OCR exam. Gold = window/scroll/
    typing phases + 10 OCR strings. Tracker expected to report mostly global motion; that
-   restraint (no fabricated object tracks during scrolling) IS the probe.
+   restraint (no fabricated object tracks during scrolling) IS the probe. **Baseline measured
+   2026-07-13 (pre-V3.0): FAILS restraint** — 61 tracks / 51 VANISH / 43 OCCLUDED / 5 conf=85
+   REVERSEs in 60s. Scored here with the annotation-free restraint metrics from V3.0 acceptance
+   PLUS the gold-based UI-activity-classification fraction (authored at this rung).
 3. **`Police Stories` (R1):** multi-sprite; candidate-set stress.
 4. **`Go` (R2):** stones-appear events vs the (partial, human-checked) move record; omission
    probes shine here — "did a stone appear in the upper-right between t1–t2?"
@@ -395,6 +459,9 @@ video.
 
 ### V3.7 Acceptance
 
+- [ ] V3.0 gate on pharo (annotation-free): false-REVERSE count = 0 in OCR-static intervals;
+      motion-claim count and churn rate reduced vs the 2026-07-13 baseline; `UNTRACKABLE`
+      abstention emitted; OCR/triage evidence unaffected by tracker abstention.
 - [ ] Seeded occlude-reverse: direction-after-reacquire ≥ 95% on dev seeds, then held-out seeds.
 - [ ] scroll-plus-motion: both motions separated on dev + held-out seeds.
 - [ ] merge-drag trap (the v2 documented failure): candidate sets prevent the silent identity
