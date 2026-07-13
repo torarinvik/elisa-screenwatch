@@ -1,6 +1,6 @@
 # Orchestra v2 — symbolic tracks, audio, model auditions, evidence ledger
 
-Status: **M1–M3 COMPLETE** (viola tracker built, trap-suite green, integrated); M4–M9 planned.
+Status: **M1–M5 + M7 COMPLETE**, M4-capture compile-verified, M6 sax auditioned; M8–M9 remaining.
 Successor to `cursor_vlm_plan.md` (COMPLETE).
 
 **Progress:**
@@ -14,6 +14,27 @@ Successor to `cursor_vlm_plan.md` (COMPLETE).
 - **M3 ✓** integration — SPEC I9 + viola member + tracker CLI contract + evidence-family rule + `track`
   cursor verb; watcher_protocol v3.2 (routing: motion → `track` first). Bass `TRACKS` summary line
   deferred (measure encoder-loop cost first — do not slow capture).
+- **M4 ✓ (cymbal)** `audiotriage.elisa` (commit 6448c19) — deterministic audio triage, 512-pt radix-2
+  FFT + RMS/ZCR; TRANSIENT/SILENCE/TONE/LEVEL_SHIFT. **M4 capture** `audiocap.swift` (commit, compiles;
+  SCStream system audio → PCM ring) — LIVE-VERIFICATION PENDING (needs Screen-Recording + live audio,
+  the co-run gate). Direct-PCM path is the CI gate and is green.
+- **M5 ✓** `audiogen.elisa` (commit 0b2d93a, WAV synth) + 5 audio trap scenes + `audio_probe.py`/
+  `audio_test.sh` — cymbal scores **100% / 0% on all 5** (transient ordering, silence timing, single
+  level-shift, tone count + 1000 Hz, av-sync within one 16 ms hop of 10.000 s). Deterministic.
+- **M7 ✓** Qwen3.5-2B audition — better honest-motion captioner (75% vs 2.5's 50%) but **fails all
+  motion traps (0%)**: prior-fill is architecture-independent within the Qwen family. Decision (pre-
+  registered): NOT the motion authority; I8 unchanged; viola owns motion. Harness worked unchanged.
+- **M6 (sax) — code built, audition BLOCKED (version).** `screenaud.py` + harness done; MiDashengLM-
+  0.6B downloads/loads (MPS+CPU), processor attaches audio correctly, but `generate` emits token 0
+  (`"!!!!"`) under the pinned transformers 5.13.1 (Qwen2.5-VL's version, ahead of MiDashengLM's remote
+  code). Root-caused; deferred to a dedicated session (separate transformers pin, or GGUF/llama.cpp).
+- **M8 (Marlin) — DECLINED, per M7.** M7 proved the Qwen family (Marlin's base) prior-fills the motion
+  traps, so Marlin can only be a coarse captioner, is CUDA-oriented + torchcodec-video-input (mismatch
+  with the ring), and would eat a Mac-port session for low marginal value. Revisit only if a coarse
+  long-span captioning verb proves needed in dogfooding.
+- **M9 (representation ladder) — REMAINING.** The A→D ladder (story.md → typed ledger → +identities →
+  graph) needs real multi-agent watcher runs scored by the referee; the largest remaining piece, best
+  done as its own arc. Proto-B already exists (log.md + arch pointers).
 
 ## Why this plan
 

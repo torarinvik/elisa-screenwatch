@@ -121,8 +121,19 @@ edge). Perception ↑ better, confabulation ↓ better:
 | scene | model | frames | perception | confab | what it said |
 |---|---|---|---|---|---|
 | motion (honest) | 3B | 16 | **50%** | 50% | count ✓, late-position ✓; **direction backwards** ("left"→right), missed the reversal |
+| motion (honest) | 3.5-2B | 8 | **75%** | 25% | direction ✓ ("right"), count ✓, position ✓; missed the reversal |
 | motion-trap | 3B | 16 | **25%** | 75% | count ✓; **missed the vanish** ("no"), reversal "**at the edge**" (prior), motion "**continuous**" |
 | motion-trap | 7B | 16 | **25%** | 75% | missed vanish, reversal "edge"; caught "not continuous" ✓ but count = **2** (spurious) |
+| motion-trap | 3.5-2B | 16 | **0%** | 100% | **all four wrong**: count 2, vanish "no", reversal "edge", motion "continuous" — pure prior-fill |
+
+**M7 Qwen3.5-2B audition (pre-registered decision).** The early-fusion Qwen3.5-2B runs on the existing
+harness unchanged (`MODEL=Qwen/Qwen3.5-2B ./eval/trap_test.sh …`). It is a *better honest-motion
+captioner* (75% vs 2.5's 50% — direction now correct) but **fails every motion trap** (0% vs 2.5's
+25%). The prior-fill failure is therefore **architecture-independent within the Qwen family** — a newer
+early-fusion base does not break it. Per the pre-registered rule (adopt-as-default needs motion-trap
+≥75%/≤25%): **not adopted as the motion authority; I8's motion policy is unchanged and the viola owns
+motion.** Qwen3.5 is at most a text/scene captioner swap. Marlin-2B (a Qwen3.5-2B fine-tune) inherits
+this family prior and is one witness with screenvlm, not two (SPEC evidence-family rule).
 
 - **Priors beat pixels, and scale does not fix it.** Both the 3B and the 7B report the physically
   *expected* motion — smooth, edge-bounce — over what the pixels show (a vanish, a mid-field

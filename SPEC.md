@@ -34,7 +34,9 @@ A member may be rewritten freely; these contracts may only change with a version
 | Bass | ACTIVITY triage (inside `frame_dump`) | symbolic, per batch |
 | Guitar | `screenocr` (Swift/Vision CLI) | symbolic, on-demand + scene-change |
 | Viola | `tracker` (Elisa, delta-stream object identity) | symbolic, on-demand (boss-dispatched) |
+| Cymbal | `audiotriage` (Elisa DSP over the audio ring) | symbolic, always-on |
 | Violin | `screenvlm` (Qwen2.5-VL-3B, local) | neural, on-demand (boss-dispatched) |
+| Sax | `screenaud` (MiDashengLM-0.6B, local) | neural, triggered — **audition blocked (version)** |
 | Singer | stream watcher (cheap LLM agent) | neural, event-woken |
 | Boss | orchestrator (stronger LLM agent) | neural, escalation-woken |
 | Referee | eval harness (`eval/`) | offline scoring |
@@ -174,6 +176,33 @@ grid↔pixel mapping). Deterministic: identical input ⇒ byte-identical output 
   model / Kalman prediction / the changed-cell+SHIFT camera path — deferred. Identity through a
   crossing is honest UNKNOWN (no confident wrong swap). Reproduce: `eval/track_test.sh motion-trap`.
 
+## audiotriage CLI contract (the cymbal — symbolic audio triage)
+
+The bass's audio twin: always-on, deterministic DSP over the audio ring (or a WAV) that emits cheap
+symbolic AUDIO events so the singer sees audio in its normal cycle with no protocol change. A 512-pt
+radix-2 FFT gives the spectrum; RMS + zero-crossings do the rest. No model — the authority over any
+`describe`-style audio *timing/count* claim the sax makes (I1).
+
+```
+audiotriage <in.wav>            16 kHz mono s16le (parses the RIFF header)
+```
+stdout — one event per line:
+```
+AUDIO <TRANSIENT|SILENCE_START|SILENCE_END|LEVEL_SHIFT|TONE> t=<ms> [dur=<ms>] [freq=<hz>] conf=<c>
+```
+Exit 0 success; 1 unreadable WAV; 2 bad args. Deterministic: identical input ⇒ byte-identical output.
+
+- **Detectors:** TRANSIENT = sharp RMS onset vs the previous 32 ms hop (catches an impact out of
+  silence *and* two impacts 150 ms apart, each preceded by a bed hop); SILENCE_START/END = RMS below
+  a floor, min-duration gated; TONE = one FFT bin holding > 30% of spectral energy for ≥ 128 ms (emits
+  its frequency); LEVEL_SHIFT = a ≥ 6 dB (2×) change in the ~0.6 s moving RMS vs a hysteresis reference.
+- **cymbal trust policy — MEASURED (M5 audio trap suite).** 100% perception / 0% confab / deterministic
+  on all five scenes: transient count incl. the 150 ms ordering, silence onset (±hop), single
+  LEVEL_SHIFT (not machine-gunned), tone count + frequency (1000 Hz exact), and an impact within one
+  16 ms hop of 10.000 s (the a/v-skew gate, direct-PCM path). The cymbal owns audio *timing and count*;
+  the sax may name *what* a sound is but never overrides the cymbal's when/how-many. Reproduce:
+  `eval/audio_test.sh <scene>`. Live source: `audiocap` (SCStream system audio → `aud_*.pcm` ring).
+
 ## screenvlm CLI contract (the violin — local video-VLM member)
 
 Answers *what happens* during a recorded time span, for non-textual motion content the symbolic
@@ -204,6 +233,23 @@ reason on stderr (distinct message, so the boss separates "pruned" from "error")
 - **Measured cost** (M1, this machine, 16 frames, full-frame 2880×1864→448): load ≈ 10 s, infer
   ≈ 12 s per call, peak RSS ≈ 10.7 GB. Per-call model load is the v1 price of statelessness; a
   `--stdin` load-once batch mode is a later add for boss sessions.
+
+## screenaud CLI contract (the sax — local audio-LM member) — AUDITION BLOCKED
+
+`screenaud.py` (MiDashengLM-0.6B, greedy) is the neural audio interpreter: it names *what a sound is*
+(impact, tone, music-state, off-screen activity) above the cymbal's symbolic timing. Same stance as
+the violin — Inferred, never overrides the cymbal's when/how-many.
+```
+screenaud.py <in.wav> [--q "question"] [--model ...] [--json]   ->  ANSWER <text> / COST …
+```
+**Status (M6): code + harness built; audition BLOCKED on a version incompatibility.** The model
+downloads, loads on MPS/CPU (~7 s load, ~5 s infer), and the custom processor attaches audio
+correctly (`input_values` (1, 320000), `audio_length`) — but `generate` emits only token 0 (`"!!!!"`)
+under the pinned **transformers 5.13.1** (chosen for Qwen2.5-VL, a major version ahead of what
+MiDashengLM's remote code targets). Root-caused precisely; not an MPS or audio-feed bug. Unblock in a
+dedicated session by pinning MiDashengLM's own transformers in a separate `.venv-aud`, or using its
+GGUF + llama.cpp path (the M6 fallback the plan named). Deferred, not faked — no sax trust policy is
+claimed until it produces real captions on the audio trap scenes.
 
 ## The cursor — unified active perception
 
