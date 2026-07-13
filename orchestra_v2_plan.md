@@ -31,17 +31,22 @@ Successor to `cursor_vlm_plan.md` (COMPLETE).
   "a person speaking"; impacts → "a cat"; absent-alarm probe → **"yes"**). ⇒ Inferred-only, split by
   claim type (like I8); cymbal owns timing/count; positive trust policy needs a real-audio (live
   `audiocap`) audition.
-- **M8 (Marlin) — DECLINED, per M7.** M7 proved the Qwen family (Marlin's base) prior-fills the motion
-  traps, so Marlin can only be a coarse captioner, is CUDA-oriented + torchcodec-video-input (mismatch
-  with the ring), and would eat a Mac-port session for low marginal value. Revisit only if a coarse
-  long-span captioning verb proves needed in dogfooding.
-- **M9 (representation ladder) — rung-B foundation BUILT.** `eval/ledger.py` builds the typed evidence
-  ledger from the symbolic members (viola + cymbal): each record carries member/family/OBSERVED-vs-
-  INFERRED/conf/evidence-pin (I7/I8/I9), and `project` derives a deterministic story.md FROM the ledger
-  (never independently edited). Demonstrated cross-member on motion-trap (appear/vanish/displaced-
-  reappear=new obj/midfield-reverse) and av-sync audio (silence→impact→silence). The A↔D *comparative*
-  scoring (which rung wins on reconstruction/retrieval/confab/maintenance-cost) still needs live
-  multi-agent watcher runs — the remaining arc; this is the factual ledger those runs build on.
+- **M8 (Marlin) — attempted, BLOCKED on gated-repo auth.** Genuinely auditioned, not pre-declined:
+  installed torchcodec (works on Mac), built a test mp4 from the motion-trap fixture (arch_tool replay
+  → ffmpeg), wrote the `.caption()`/`.find()` audition script. Download failed — **NemoStation/Marlin-2B
+  is a GATED repo (401)**: needs the user to accept Marlin's terms on HF + provide an HF token (a user
+  action I can't take per the safety rules). Infra is ready for when access is granted. Expected result
+  per M7's family finding: Marlin (Qwen3.5-2B fine-tune, 2 FPS/240-frame training) prior-fills motion —
+  coarse captioner only, never the motion authority.
+- **M9 (representation ladder) — rung-B/C built + first A/B/C bake-off RUN.** `eval/ledger.py` builds
+  the typed evidence ledger from the symbolic members (member/family/OBS-INF/conf/evidence-pin per
+  I7/I8/I9) and projects a deterministic story.md from it. **First live 3-arm bake-off** (`eval/
+  bakeoff.md`): watcher agents A (prose) / B (ledger) / C (ledger+identities) over motion-trap with a
+  competing VLM prior-fill. Result: **all three 75%/25%, all resisted the prior-fill** (provenance, not
+  representation format, drives confab resistance); **C cost 55% more memory (447 vs 289 chars) for zero
+  reconstruction gain** — the thinnest rung (A/B) wins at single-episode scale, exactly the ladder's
+  cost rule. The A-vs-B separation + rung D need a **long multi-episode stream** (compression/aging) —
+  the remaining scale-up; harness + ledger machinery are in place for it.
 
 ## Why this plan
 
