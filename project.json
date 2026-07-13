@@ -24,6 +24,13 @@
       "output": "scenegen",
       "opt": "3",
       "link-flags": ["-lcompression"]
+    },
+    "tracker": {
+      "entry": "tracker.elisa",
+      "emit": "obj",
+      "run-emit": "obj",
+      "output": "tracker",
+      "opt": "3"
     }
   }
 }
