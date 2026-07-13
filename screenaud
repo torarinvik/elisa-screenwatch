@@ -1,0 +1,9 @@
+#!/bin/sh
+# screenaud — run screenaud.py in the audio venv (.venv-aud: transformers 4.57 for MiDashengLM),
+# falling back to $SCREENAUD_PYTHON. The sax needs a DIFFERENT transformers than the violin
+# (MiDashengLM targets 4.57; Qwen2.5-VL uses 5.13), hence its own venv.
+HERE=$(cd "$(dirname "$0")" && pwd)
+PY="$HERE/.venv-aud/bin/python"
+[ -x "$PY" ] || PY="${SCREENAUD_PYTHON:-}"
+[ -n "$PY" ] || { echo "screenaud: no .venv-aud; run ./setup_aud.sh" >&2; exit 2; }
+exec "$PY" "$HERE/screenaud.py" "$@"

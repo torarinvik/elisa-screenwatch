@@ -24,10 +24,13 @@ Successor to `cursor_vlm_plan.md` (COMPLETE).
 - **M7 ✓** Qwen3.5-2B audition — better honest-motion captioner (75% vs 2.5's 50%) but **fails all
   motion traps (0%)**: prior-fill is architecture-independent within the Qwen family. Decision (pre-
   registered): NOT the motion authority; I8 unchanged; viola owns motion. Harness worked unchanged.
-- **M6 (sax) — code built, audition BLOCKED (version).** `screenaud.py` + harness done; MiDashengLM-
-  0.6B downloads/loads (MPS+CPU), processor attaches audio correctly, but `generate` emits token 0
-  (`"!!!!"`) under the pinned transformers 5.13.1 (Qwen2.5-VL's version, ahead of MiDashengLM's remote
-  code). Root-caused; deferred to a dedicated session (separate transformers pin, or GGUF/llama.cpp).
+- **M6 (sax) ✓ — unblocked + auditioned.** Root cause: MiDashengLM targets transformers **4.57**; the
+  5.13.1 pin (Qwen2.5-VL's) made `generate` emit token 0. Fix: own venv `.venv-aud` (transformers 4.57,
+  `setup_aud.sh` + `screenaud` shim). On 4.57 it produces real captions (MPS, ~5 s load / ~1 s infer).
+  **Measured policy:** fluent but **untrusted on synthetic OOD audio and it confabulates** (beeps →
+  "a person speaking"; impacts → "a cat"; absent-alarm probe → **"yes"**). ⇒ Inferred-only, split by
+  claim type (like I8); cymbal owns timing/count; positive trust policy needs a real-audio (live
+  `audiocap`) audition.
 - **M8 (Marlin) — DECLINED, per M7.** M7 proved the Qwen family (Marlin's base) prior-fills the motion
   traps, so Marlin can only be a coarse captioner, is CUDA-oriented + torchcodec-video-input (mismatch
   with the ring), and would eat a Mac-port session for low marginal value. Revisit only if a coarse

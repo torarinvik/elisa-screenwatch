@@ -36,7 +36,7 @@ A member may be rewritten freely; these contracts may only change with a version
 | Viola | `tracker` (Elisa, delta-stream object identity) | symbolic, on-demand (boss-dispatched) |
 | Cymbal | `audiotriage` (Elisa DSP over the audio ring) | symbolic, always-on |
 | Violin | `screenvlm` (Qwen2.5-VL-3B, local) | neural, on-demand (boss-dispatched) |
-| Sax | `screenaud` (MiDashengLM-0.6B, local) | neural, triggered — **audition blocked (version)** |
+| Sax | `screenaud` (MiDashengLM-0.6B, local) | neural, triggered (boss-dispatched) |
 | Singer | stream watcher (cheap LLM agent) | neural, event-woken |
 | Boss | orchestrator (stronger LLM agent) | neural, escalation-woken |
 | Referee | eval harness (`eval/`) | offline scoring |
@@ -234,22 +234,28 @@ reason on stderr (distinct message, so the boss separates "pruned" from "error")
   ≈ 12 s per call, peak RSS ≈ 10.7 GB. Per-call model load is the v1 price of statelessness; a
   `--stdin` load-once batch mode is a later add for boss sessions.
 
-## screenaud CLI contract (the sax — local audio-LM member) — AUDITION BLOCKED
+## screenaud CLI contract (the sax — local audio-LM member)
 
 `screenaud.py` (MiDashengLM-0.6B, greedy) is the neural audio interpreter: it names *what a sound is*
 (impact, tone, music-state, off-screen activity) above the cymbal's symbolic timing. Same stance as
 the violin — Inferred, never overrides the cymbal's when/how-many.
 ```
-screenaud.py <in.wav> [--q "question"] [--model ...] [--json]   ->  ANSWER <text> / COST …
+screenaud <in.wav> [--q "question"] [--model ...] [--json]   ->  ANSWER <text> / COST …
 ```
-**Status (M6): code + harness built; audition BLOCKED on a version incompatibility.** The model
-downloads, loads on MPS/CPU (~7 s load, ~5 s infer), and the custom processor attaches audio
-correctly (`input_values` (1, 320000), `audio_length`) — but `generate` emits only token 0 (`"!!!!"`)
-under the pinned **transformers 5.13.1** (chosen for Qwen2.5-VL, a major version ahead of what
-MiDashengLM's remote code targets). Root-caused precisely; not an MPS or audio-feed bug. Unblock in a
-dedicated session by pinning MiDashengLM's own transformers in a separate `.venv-aud`, or using its
-GGUF + llama.cpp path (the M6 fallback the plan named). Deferred, not faked — no sax trust policy is
-claimed until it produces real captions on the audio trap scenes.
+Runs in its **own venv** `.venv-aud` (transformers **4.57**, via `./setup_aud.sh`) — separate from the
+violin's `.venv-vlm` (transformers 5.13), because MiDashengLM's remote code emits garbage (token 0,
+`"!!!!"`) under 5.x. On 4.57 it loads on MPS in ~5 s and infers in ~1 s.
+
+- **sax trust policy — MEASURED (M6 audition).** The sax is **fluent but untrusted on synthetic audio
+  and it confabulates.** On the audiogen scenes it mischaracterizes out-of-distribution content (1 kHz
+  beeps → "a person speaking"; noise impacts → "the sound of a cat"), and on the absent-event probe
+  ("is there an alarm?" over a no-alarm scene) it answers **"yes"** — a fabrication. So, exactly like
+  the violin (I8), a sax answer is **Inferred-only, split by claim type**: it may seed a hypothesis
+  about *what kind* of real-world sound is present, but it **never overrides the cymbal's timing/count**
+  and a bare sax claim never becomes a `story.md` EVENT. The synthetic trap scenes measure the model's
+  OOD/confab floor, not its real competence — a **real-audio audition (live `audiocap` capture)** is
+  needed for the positive trust policy; until then the sax is a low-trust hypothesis source, the cymbal
+  is the audio authority. Reproduce: `./screenaud /tmp/ag_tone-alarm.wav`.
 
 ## The cursor — unified active perception
 
