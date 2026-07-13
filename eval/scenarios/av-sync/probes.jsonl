@@ -1,0 +1,2 @@
+{"id": "avs_impact", "kind": "event", "op": "transient_near", "at": 10000, "tol": 50, "q": "Is there an impact near 10 seconds (within 50ms)? Answer yes or no.", "gold": "yes", "match": "boolean", "fact_t": 10000}
+{"id": "avs_count", "kind": "event", "op": "transient_count", "q": "How many impacts occur in total? Answer a number.", "gold": "1", "match": "numeric", "fact_t": 10000}

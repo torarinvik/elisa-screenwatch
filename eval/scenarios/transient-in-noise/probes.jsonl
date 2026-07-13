@@ -1,0 +1,2 @@
+{"id": "atn_count", "kind": "event", "op": "transient_count", "q": "How many impact/transient sounds occur? Answer a number.", "gold": "3", "match": "numeric", "fact_t": 4000}
+{"id": "atn_cluster", "kind": "event", "op": "transient_count", "span": [8700, 9500], "q": "How many impacts occur near 9 seconds? Answer a number.", "gold": "2", "match": "numeric", "fact_t": 9000}

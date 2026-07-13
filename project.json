@@ -38,6 +38,13 @@
       "run-emit": "obj",
       "output": "audiogen",
       "opt": "3"
+    },
+    "audiotriage": {
+      "entry": "audiotriage.elisa",
+      "emit": "obj",
+      "run-emit": "obj",
+      "output": "audiotriage",
+      "opt": "3"
     }
   }
 }

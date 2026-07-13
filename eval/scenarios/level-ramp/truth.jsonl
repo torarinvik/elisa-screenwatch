@@ -1,0 +1,4 @@
+{"type": "phase", "t0": 0, "t1": 8000, "label": "steady low level", "activity": "video"}
+{"type": "phase", "t0": 8000, "t1": 11000, "label": "level ramps up ~9dB", "activity": "video"}
+{"type": "fact", "t0": 8000, "t1": 20000, "key": "level_increased", "value": "yes"}
+{"type": "event", "t": 8000, "id": "e0", "desc": "the sound level rises (music intensifies)", "object": "a1"}

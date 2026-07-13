@@ -1,0 +1,4 @@
+{"type": "phase", "t0": 0, "t1": 20000, "label": "three 1kHz beeps", "activity": "video"}
+{"type": "event", "t": 2000, "id": "e0", "desc": "a 1kHz beep", "object": "a1"}
+{"type": "event", "t": 4000, "id": "e1", "desc": "a 1kHz beep", "object": "a1"}
+{"type": "event", "t": 6000, "id": "e2", "desc": "a 1kHz beep", "object": "a1"}

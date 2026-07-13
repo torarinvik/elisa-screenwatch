@@ -1,0 +1,2 @@
+{"type": "phase", "t0": 0, "t1": 20000, "label": "silence then a single impact at 10s", "activity": "still"}
+{"type": "event", "t": 10000, "id": "e0", "desc": "a single impact sound at exactly 10 seconds", "object": "a1"}

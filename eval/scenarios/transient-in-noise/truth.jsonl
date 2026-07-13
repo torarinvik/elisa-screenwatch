@@ -1,0 +1,4 @@
+{"type": "phase", "t0": 0, "t1": 20000, "label": "quiet noise bed with impacts", "activity": "video"}
+{"type": "event", "t": 4000, "id": "e0", "desc": "an impact sound", "object": "a1"}
+{"type": "event", "t": 9000, "id": "e1", "desc": "an impact sound", "object": "a1"}
+{"type": "event", "t": 9150, "id": "e2", "desc": "a second impact 150ms later", "object": "a1"}
