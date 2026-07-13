@@ -31,6 +31,13 @@
       "run-emit": "obj",
       "output": "tracker",
       "opt": "3"
+    },
+    "audiogen": {
+      "entry": "audiogen.elisa",
+      "emit": "obj",
+      "run-emit": "obj",
+      "output": "audiogen",
+      "opt": "3"
     }
   }
 }
