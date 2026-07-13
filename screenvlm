@@ -1,0 +1,12 @@
+#!/bin/sh
+# screenvlm — shim that runs screenvlm.py in the pinned VLM venv.
+# Provision the venv once with ./setup_vlm.sh (creates .venv-vlm). For an ad-hoc run against an
+# already-working interpreter, set SCREENVLM_PYTHON=/path/to/venv/bin/python.
+HERE=$(cd "$(dirname "$0")" && pwd)
+PY="$HERE/.venv-vlm/bin/python"
+[ -x "$PY" ] || PY="$SCREENVLM_PYTHON"
+[ -n "$PY" ] && [ -x "$PY" ] || {
+    echo "screenvlm: no venv — run ./setup_vlm.sh (or set SCREENVLM_PYTHON to a venv python)" >&2
+    exit 2
+}
+exec "$PY" "$HERE/screenvlm.py" "$@"

@@ -3,3 +3,10 @@ screenocr
 arch_tool
 screenasr
 scenegen
+*.idx
+*.bin
+*.ppm
+*.txt
+.venv-vlm/
+__pycache__/
+*.pyc

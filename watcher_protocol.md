@@ -1,4 +1,4 @@
-# Screen-watcher protocol v3 — structured visuospatial memory
+# Screen-watcher protocol v3.1 — structured visuospatial memory
 
 The watcher (the orchestra's *singer*) is a cheap, short-lived LLM agent that reads the
 delta-encoded batch stream and maintains an *external, structured* understanding of the screen.
@@ -10,6 +10,13 @@ format, ownership, invariants) live in SPEC.md; this file is the singer's playbo
 memory hierarchy** with a **typed schema**, so the system can watch an unbounded stream while its
 total memory stays compact — the central research question ("can an LLM consume a visual world
 sequentially and maintain a compact, evolving understanding of it").
+
+**What changed in v3.1.** The **cursor** (SPEC "The cursor") gains a neural verb, `describe`, backed
+by the local video-VLM member `screenvlm` (the *violin*). It answers *what is happening* for
+non-textual motion content the symbolic stream can only report as statistics. Two rules bound it: the
+**singer never calls it** (deep attention is the boss's budget), and every `describe` answer is
+**Inferred-only** and evidence-pinned (I8) — it may not become a `story.md` EVENT until the Phase-3
+trap-test fills in the describe trust policy in SPEC.
 
 ## The memory hierarchy (3 tiers)
 
@@ -86,9 +93,13 @@ watcher rotations. Rules:
 8. **Consolidate (Tier 2 → Tier 3).** If you are the consolidator this cycle (heartbeat, or `log.md`
    past its line cap — see the consolidator playbook), fold the oldest EVENTS into `story.md` and
    truncate them. Otherwise skip — a normal watcher never writes `story.md`.
-9. **Escalate** when a goal-relevant question is beyond reach (needs zoom, needs pruned history):
-   overwrite `escalation.md` with the question + evidence pointer + why it matters. Then continue —
-   never stall the stream.
+9. **Escalate** when a goal-relevant question is beyond reach (needs zoom, needs pruned history, or
+   needs *event semantics* the grid can't give): overwrite `escalation.md` with the question +
+   evidence pointer + why it matters. Then continue — never stall the stream. A specific new trigger:
+   **`ACTIVITY video`/`switching` batches that are goal-relevant but OCR-empty** (high churn, no text —
+   the grid measures *that* something moves, not *what happens*) → escalate with a describe-shaped
+   question naming the span, e.g. "what happens on screen during t=48000..54000?". Do **not** call
+   `screenvlm` yourself; the boss owns that budget.
 
 ## Tier 1 — `state.md` (working memory, rewrite each cycle, ≤ 2 KB)
 
@@ -182,9 +193,14 @@ why: <one line tying it to the goal>
 
 1. Read goal.md, story.md, state.md, log.md tail, escalation.md.
 2. If goal-relevant: formulate ≤ 2 SPECIFIC questions → write `queries/q_<id>.md` per SPEC.md
-   → dispatch a cheap sub-watcher per query.
+   → dispatch a cheap sub-watcher per query. Pick the query `type` by what the question needs:
+   `zoom`/`ocr` for text, `compare` to confirm a claimed change at the pixel, and **`describe`** (the
+   violin) for *what happens* in a motion span — set `span: t0,t1` (+ optional `region`).
 3. On answers: append a boss-attributed EVENT to log.md; if durable, reflect it in story.md via the
-   consolidator; update goal.md sub-goals if warranted; clear the escalation.
+   consolidator; update goal.md sub-goals if warranted; clear the escalation. A `describe` answer is
+   INFERRED (I8): until the trust policy says otherwise it may seed a HYPOTHESIS or answer the
+   question, but **must not become a story.md EVENT**, and a contradicting `ocr`/`compare` result
+   overrides it. Prefer corroborating a describe claim with a symbolic verb before acting on it.
 4. Hard stops: ≤ 3 queries per escalation; `evidence-exhausted`/`pruned` answers go to an
    OPEN_QUESTION in state.md and are never re-asked for the same event.
 
@@ -192,6 +208,11 @@ why: <one line tying it to the goal>
 
 Read the query file; execute by type (SPEC.md): temporal = close-read the pointed batch range;
 spatial = read only the pointed keyframe rows; zoom = map rows→pixels via SPEC.md's formula and run
-`screenocr batch_<b>.jpg --crop x,y,w,h`. Write `q_<id>.answer.md` with status answered /
-evidence-exhausted / pruned, the finding (OBSERVED/INFERRED separated), and fresh evidence pointers.
-Do nothing else — no state.md / story.md writes.
+`screenocr batch_<b>.jpg --crop x,y,w,h`; **describe** = run
+`screenvlm <batch_dir> --span t0,t1 [--region x,y,w,h] --q "<question>"`, then copy its `ANSWER` as
+the finding under **INFERRED** and its `EVIDENCE` line verbatim as the evidence pointer — never
+promote VLM text to OBSERVED (I8). Map screenvlm's exit: partial answer (`partial=true`) → status
+`answered` with the caveat noted; `evidence-exhausted` on stderr → status `pruned`/`evidence-exhausted`.
+Write `q_<id>.answer.md` with status answered / evidence-exhausted / pruned, the finding
+(OBSERVED/INFERRED separated), and fresh evidence pointers. Do nothing else — no state.md / story.md
+writes.

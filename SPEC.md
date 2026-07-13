@@ -14,6 +14,10 @@ A member may be rewritten freely; these contracts may only change with a version
 - **I7** Memory is a 3-tier hierarchy (working `state.md` → episodic `log.md` → semantic `story.md`);
   information only flows *down*, each tier has a hard size cap, and consolidation loses representation
   but never invents. Object ids are stable and reused across tiers and watcher rotations.
+- **I8** A `describe` (VLM) answer is interpretation (I1, applied to a neural claimant, not an oracle):
+  it must carry the exact archive seq span it actually saw; it may never override a symbolic member's
+  measurement (an `ocr`/`compare` result contradicting the VLM wins); and it enters memory only per the
+  **describe trust policy** (below), which is filled in by the Phase-3 trap-test, not assumed.
 
 ## Members
 
@@ -22,6 +26,7 @@ A member may be rewritten freely; these contracts may only change with a version
 | Drums | delta encoder (`frame_dump`, Elisa) | symbolic, always-on |
 | Bass | ACTIVITY triage (inside `frame_dump`) | symbolic, per batch |
 | Guitar | `screenocr` (Swift/Vision CLI) | symbolic, on-demand + scene-change |
+| Violin | `screenvlm` (Qwen2.5-VL-3B, local) | neural, on-demand (boss-dispatched) |
 | Singer | stream watcher (cheap LLM agent) | neural, event-woken |
 | Boss | orchestrator (stronger LLM agent) | neural, escalation-woken |
 | Referee | eval harness (`eval/`) | offline scoring |
@@ -124,15 +129,73 @@ stdout: one line per recognized string: `<x> <y> <w> <h> <conf> <text>` (pixel c
 FULL image's space even when cropped; conf 0–1). Exit 0 on success, 1 on unreadable image.
 `batch_<n>.ocr.txt` holds the full-frame output for that batch's jpg.
 
+## screenvlm CLI contract (the violin — local video-VLM member)
+
+Answers *what happens* during a recorded time span, for non-textual motion content the symbolic
+members can only report as statistics. Stateless like screenocr; a **neural claimant, not an oracle**
+(I1/I8). Frames are pulled from the Tier-A ring via `arch_tool show` (no video decode), so every
+answer is automatically evidence-pointed and re-groundable to exact pixels.
+
+```
+screenvlm <batch_dir> --span t0,t1 [--frames 16] [--region x,y,w,h]
+          [--q "question"] [--arch-tool ./arch_tool] [--model ...] [--json]
+```
+stdout (text mode):
+```
+ANSWER <one-paragraph answer>
+EVIDENCE arch seq <s0>..<s1> t=<t0>..<t1> frames=<n> region=<x,y,w,h|full>[ partial=true]
+COST load=<s> infer=<s> model=Qwen2.5-VL-3B device=<mps|cpu>
+```
+Exit 0 success; 2 bad args; 1 when the span is not fully in the live ring — with a *partial* answer
+marked `partial=true` if ≥ 4 frames were recoverable, else no answer and an `evidence-exhausted`
+reason on stderr (distinct message, so the boss separates "pruned" from "error").
+
+- **Model:** Qwen2.5-VL-3B-Instruct, fp16, MPS; greedy decode (`do_sample=False`) → reproducible.
+  Provision the pinned venv once with `./setup_vlm.sh`; HF model cache (~7 GB) is shared with the
+  VJEPA2 project. The 7B is a `--model` swap for offline use only, never while recording.
+- **Frame selection:** uniform sample of ≤ `--frames` (cap 32) archive seqs across the span, each
+  decoded and resized to 448-wide before the vision encoder (the proven recipe); `--region` crops at
+  source resolution first, preserving native detail when zoomed.
+- **Measured cost** (M1, this machine, 16 frames, full-frame 2880×1864→448): load ≈ 10 s, infer
+  ≈ 12 s per call, peak RSS ≈ 10.7 GB. Per-call model load is the v1 price of statelessness; a
+  `--stdin` load-once batch mode is a later add for boss sessions.
+
+## The cursor — unified active perception
+
+The **cursor** is the agent-controlled attention pointer `(time-span, region, question-kind)` over the
+recorded sequence. Four verbs answer at three rates; every answer carries an evidence pointer into the
+Tier-A ring, so any neural claim is re-groundable and confab-scorable:
+
+| verb | member | answers | kind |
+|---|---|---|---|
+| `show`     | arch_tool + vision-read | what does (t, region) look like, exactly | symbolic decode |
+| `ocr`      | arch-ocr.sh (screenocr) | what text is at (t, region) | symbolic |
+| `compare`  | arch_tool | did region R change between t1,t2 (count + bbox, exact) | symbolic |
+| `describe` | screenvlm | what happens during [t0,t1] — motion, causality, events | **neural** |
+
+Three-rate perception, one instrument: always-on symbolic stream for monitoring → exact tools for
+text/change verification → VLM for event semantics. The always-on channel stays symbolic; `describe`
+is the boss's budgeted deep-attention verb (the singer never calls it — see watcher_protocol).
+
+### describe trust policy (I8) — PENDING the Phase-3 trap-test
+
+Until the `motion`/`motion-trap` trap-test (cursor_vlm_plan.md §4) measures screenvlm's confab
+profile, `describe` answers are **Inferred-only**: they may populate `state.md` HYPOTHESES /
+OPEN_QUESTIONS and answer a boss query, but **may not create `story.md` EVENTS**, and a contradicting
+symbolic result always wins. The measured trap numbers replace this paragraph with the graduated
+policy (propose-events-if-corroborated / hypothesis-generator-only / benched).
+
 ## Query protocol (active perception)
 
 `queries/q_<id>.md` (boss writes):
 ```markdown
 # Query <id>
 question: <one specific question>
-type: temporal | spatial | zoom
-evidence: [batch <b> f<i> rows <a>-<b>]
-budget: <max sub-watcher dispatches>
+type: temporal | spatial | zoom | describe
+span: <t0,t1 in ms>            # describe only (the clip to interpret)
+region: <x,y,w,h>             # optional, describe/zoom (source pixels)
+evidence: [batch <b> f<i> rows <a>-<b>] | [arch seq <s0>..<s1> t=<t0>..<t1>]
+budget: <max sub-watcher dispatches>   # for describe: max screenvlm invocations
 deadline_batch: <give up after this batch number>
 ```
 
@@ -140,13 +203,20 @@ deadline_batch: <give up after this batch number>
 ```markdown
 # Answer <id>
 status: answered | evidence-exhausted | pruned
-answer: <the finding, observed/inferred separated>
-evidence: [batch <b> f<i> ...]
+answer: <the finding, OBSERVED/INFERRED separated; all describe content is INFERRED>
+evidence: [batch <b> f<i> ...] | [arch seq <s0>..<s1> t=<t0>..<t1>]
 ```
 
 Execution: temporal → read the pointed batch range closely; spatial → read only the pointed
 rows of the keyframe grid; zoom → map rows to pixels (formula above), run
-`screenocr batch_<b>.jpg --crop ...`, read the strings.
+`screenocr batch_<b>.jpg --crop ...`, read the strings; **describe** → resolve `span` (+`region`)
+and run `screenvlm <batch_dir> --span t0,t1 [--region ...] --q "<question>"`, copy its `ANSWER` as
+INFERRED with its `EVIDENCE` line verbatim (never re-label VLM content as OBSERVED — I8).
+
+**Evidence-pointer grammar.** Two forms, used interchangeably wherever evidence is cited:
+`[batch <b> f<i> rows <a>-<b>]` (inside the retention window) and
+`[arch seq <s0>..<s1> t=<t0>..<t1>]` (against the Tier-A ring, surviving batch pruning — the form
+every `describe`/`show`/`compare` answer carries).
 
 ### Archive queries (`arch_tool`) — resolving evidence at exact-pixel fidelity
 
@@ -179,4 +249,5 @@ is recorded under state.md's Unknown and never re-asked for the same event; intr
 recorder (always) → triage (free, per batch) → OCR (scene-change batches only)
 → singer (event boundary or ~30s heartbeat; `still` batches cost ~zero tokens)
 → consolidator (slow heartbeat or log.md past its line cap; folds Tier 2 → Tier 3)
-→ boss (escalation.md changes only) → sub-watchers (bounded by query budgets).
+→ boss (escalation.md changes only) → sub-watchers (bounded by query budgets; a `describe`
+sub-watcher spends the violin/`screenvlm` — deep attention is the boss's budget, never the singer's).

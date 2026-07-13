@@ -1,7 +1,14 @@
 # Plan: the perception cursor + local-VLM member ("violin")
 
-Status: PLAN — not yet implemented. Roadmap position: extends steps 4/7 (archive queries →
-attention-driven retrieval) and feeds step 6 (representation bake-off, candidate 7).
+Status: IN PROGRESS. Roadmap position: extends steps 4/7 (archive queries → attention-driven
+retrieval) and feeds step 6 (representation bake-off, candidate 7).
+
+Progress: **M1 done** — `screenvlm` + `setup_vlm.sh` + repo-local `.venv-vlm`; verified on a live
+34s capture (read exact title-card text; load ≈ 10 s, infer ≈ 8–12 s, peak RSS ≈ 10.7 GB, MPS);
+partial-span / evidence-exhausted paths exercised. **M2 done** — SPEC gains I8, the violin member,
+the screenvlm contract, "The cursor" section, `describe` query type + evidence grammar; watcher_
+protocol → v3.1. Trust policy left explicitly PENDING the M3 trap-test. Next: **M3** (motion +
+motion-trap scenes → measured confab profile → fill in the trust policy).
 
 ## 0. Motivation and thesis fit
 
