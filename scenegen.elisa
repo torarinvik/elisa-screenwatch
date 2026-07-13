@@ -56,7 +56,7 @@ def fill_bg(color: u32) -> void:
     n: i32 = SG_W * SG_H
     i: mutable i32 = 0
     while i < n:
-        SCREEN_GRAB[i.usize()] <- color
+        Encoder::SCREEN_GRAB[i.usize()] <- color
         i <- i + 1
 
 def fill_rect(x: i32, y: i32, w: i32, h: i32, color: u32) -> void:
@@ -65,7 +65,7 @@ def fill_rect(x: i32, y: i32, w: i32, h: i32, color: u32) -> void:
         if yy >= 0 and yy < SG_H:
             xx: mutable i32 = x
             while xx < x + w:
-                SCREEN_GRAB[(yy * SG_W + xx).usize()] <- color if xx >= 0 and xx < SG_W
+                Encoder::SCREEN_GRAB[(yy * SG_W + xx).usize()] <- color if xx >= 0 and xx < SG_W
                 xx <- xx + 1
         yy <- yy + 1
 
@@ -510,42 +510,42 @@ def render_scene(scene_id: i32, t_ms: i64) -> void:
 # substring directions/zones). Unseeded fixtures keep using the authored gold in eval/scenarios/.
 
 def jq(s: cstr) -> void:                              # "s"
-    txt_byte(34)
-    txt_str(s)
-    txt_byte(34)
+    Encoder::txt_byte(34)
+    Encoder::txt_str(s)
+    Encoder::txt_byte(34)
 
 def jkey(k: cstr) -> void:                            # ,"k":   (leading comma; callers open with {"
-    txt_byte(44)
-    txt_byte(34)
-    txt_str(k)
-    txt_byte(34)
-    txt_byte(58)
+    Encoder::txt_byte(44)
+    Encoder::txt_byte(34)
+    Encoder::txt_str(k)
+    Encoder::txt_byte(34)
+    Encoder::txt_byte(58)
 
 def gold_write(dir: cstr, name: cstr) -> void:
-    build_named_path(&BATCH_PATH[0], &BATCH_TMP[0], dir, name)
-    f: void&? = fopen(&BATCH_PATH[0], "wb".cast[u8&])
+    Encoder::build_named_path(&Encoder::BATCH_PATH[0], &Encoder::BATCH_TMP[0], dir, name)
+    f: void&? = fopen(&Encoder::BATCH_PATH[0], "wb".cast[u8&])
     if f is fp:
-        _ = fwrite(&TXT[0], 1.usize(), txt_len.usize(), fp)
+        _ = fwrite(&Encoder::TXT[0], 1.usize(), Encoder::txt_len.usize(), fp)
         _ = fclose(fp)
 
 # one probes.jsonl line: {"id":..,"ask_t":s1,"kind":..,"span":[s0,s1],"op":..,"q":..,"gold":..,"match":..,"fact_t":..}
 def emit_probe(id: cstr, kind: cstr, op: cstr, s0: i64, s1: i64, q: cstr, gold: cstr, mt: cstr, fact_t: i64) -> void:
-    txt_byte(123)
-    txt_byte(34)
-    txt_str("id")
-    txt_byte(34)
-    txt_byte(58)
+    Encoder::txt_byte(123)
+    Encoder::txt_byte(34)
+    Encoder::txt_str("id")
+    Encoder::txt_byte(34)
+    Encoder::txt_byte(58)
     jq(id)
     jkey("ask_t")
-    txt_dec(s1)
+    Encoder::txt_dec(s1)
     jkey("kind")
     jq(kind)
     jkey("span")
-    txt_byte(91)
-    txt_dec(s0)
-    txt_byte(44)
-    txt_dec(s1)
-    txt_byte(93)
+    Encoder::txt_byte(91)
+    Encoder::txt_dec(s0)
+    Encoder::txt_byte(44)
+    Encoder::txt_dec(s1)
+    Encoder::txt_byte(93)
     jkey("op")
     jq(op)
     jkey("q")
@@ -555,59 +555,59 @@ def emit_probe(id: cstr, kind: cstr, op: cstr, s0: i64, s1: i64, q: cstr, gold: 
     jkey("match")
     jq(mt)
     jkey("fact_t")
-    txt_dec(fact_t)
-    txt_byte(125)
-    txt_byte(10)
+    Encoder::txt_dec(fact_t)
+    Encoder::txt_byte(125)
+    Encoder::txt_byte(10)
 
 # one counter digit probe (VLM-answered, no op): {"id":..,"ask_t":..,"kind":"perception","q":..,"gold":"<d>","match":"numeric","fact_t":..}
 def emit_probe_dig(id: cstr, ask_t: i64, q: cstr, d: i32, fact_t: i64) -> void:
-    txt_byte(123)
-    txt_byte(34)
-    txt_str("id")
-    txt_byte(34)
-    txt_byte(58)
+    Encoder::txt_byte(123)
+    Encoder::txt_byte(34)
+    Encoder::txt_str("id")
+    Encoder::txt_byte(34)
+    Encoder::txt_byte(58)
     jq(id)
     jkey("ask_t")
-    txt_dec(ask_t)
+    Encoder::txt_dec(ask_t)
     jkey("kind")
     jq("perception")
     jkey("q")
     jq(q)
     jkey("gold")
-    txt_byte(34)
-    txt_dec(d.i64())
-    txt_byte(34)
+    Encoder::txt_byte(34)
+    Encoder::txt_dec(d.i64())
+    Encoder::txt_byte(34)
     jkey("match")
     jq("numeric")
     jkey("fact_t")
-    txt_dec(fact_t)
-    txt_byte(125)
-    txt_byte(10)
+    Encoder::txt_dec(fact_t)
+    Encoder::txt_byte(125)
+    Encoder::txt_byte(10)
 
 # one relation probe (V1.3b): emit_probe plus an "arr_cx" field — A's centroid column (in the
 # default 192-wide grid) at the moment it reaches B, so the op can locate the contact without
 # CONTACT events or stable track ids.
 def emit_probe_rel(id: cstr, s0: i64, s1: i64, q: cstr, gold: cstr, fact_t: i64, arr_cx: i64) -> void:
-    txt_byte(123)
-    txt_byte(34)
-    txt_str("id")
-    txt_byte(34)
-    txt_byte(58)
+    Encoder::txt_byte(123)
+    Encoder::txt_byte(34)
+    Encoder::txt_str("id")
+    Encoder::txt_byte(34)
+    Encoder::txt_byte(58)
     jq(id)
     jkey("ask_t")
-    txt_dec(s1)
+    Encoder::txt_dec(s1)
     jkey("kind")
     jq("relation")
     jkey("span")
-    txt_byte(91)
-    txt_dec(s0)
-    txt_byte(44)
-    txt_dec(s1)
-    txt_byte(93)
+    Encoder::txt_byte(91)
+    Encoder::txt_dec(s0)
+    Encoder::txt_byte(44)
+    Encoder::txt_dec(s1)
+    Encoder::txt_byte(93)
     jkey("op")
     jq("move_before_arrival")
     jkey("arr_cx")
-    txt_dec(arr_cx)
+    Encoder::txt_dec(arr_cx)
     jkey("q")
     jq(q)
     jkey("gold")
@@ -615,47 +615,47 @@ def emit_probe_rel(id: cstr, s0: i64, s1: i64, q: cstr, gold: cstr, fact_t: i64,
     jkey("match")
     jq("boolean")
     jkey("fact_t")
-    txt_dec(fact_t)
-    txt_byte(125)
-    txt_byte(10)
+    Encoder::txt_dec(fact_t)
+    Encoder::txt_byte(125)
+    Encoder::txt_byte(10)
 
 # one truth.jsonl event line: {"type":"event","t":..,"id":..,"desc":..,"object":..}
 def emit_event(t: i64, id: cstr, desc: cstr, obj: cstr) -> void:
-    txt_byte(123)
-    txt_byte(34)
-    txt_str("type")
-    txt_byte(34)
-    txt_byte(58)
+    Encoder::txt_byte(123)
+    Encoder::txt_byte(34)
+    Encoder::txt_str("type")
+    Encoder::txt_byte(34)
+    Encoder::txt_byte(58)
     jq("event")
     jkey("t")
-    txt_dec(t)
+    Encoder::txt_dec(t)
     jkey("id")
     jq(id)
     jkey("desc")
     jq(desc)
     jkey("object")
     jq(obj)
-    txt_byte(125)
-    txt_byte(10)
+    Encoder::txt_byte(125)
+    Encoder::txt_byte(10)
 
 # one truth.jsonl fact line: {"type":"fact","t0":..,"t1":..,"key":..,"value":..}
 def emit_fact(t0: i64, t1: i64, key: cstr, value: cstr) -> void:
-    txt_byte(123)
-    txt_byte(34)
-    txt_str("type")
-    txt_byte(34)
-    txt_byte(58)
+    Encoder::txt_byte(123)
+    Encoder::txt_byte(34)
+    Encoder::txt_str("type")
+    Encoder::txt_byte(34)
+    Encoder::txt_byte(58)
     jq("fact")
     jkey("t0")
-    txt_dec(t0)
+    Encoder::txt_dec(t0)
     jkey("t1")
-    txt_dec(t1)
+    Encoder::txt_dec(t1)
     jkey("key")
     jq(key)
     jkey("value")
     jq(value)
-    txt_byte(125)
-    txt_byte(10)
+    Encoder::txt_byte(125)
+    Encoder::txt_byte(10)
 
 def emit_gold(scene_id: i32, dir: cstr, dur: i64) -> void:
     return if SG_SEED < 0
@@ -663,7 +663,7 @@ def emit_gold(scene_id: i32, dir: cstr, dur: i64) -> void:
     zone: cstr = "left" if MO_MIR == 1 else "right"
 
     # ---- truth.jsonl ----
-    txt_len <- 0
+    Encoder::txt_len <- 0
     if scene_id == 2:
         emit_event(MO_TB.i64(), "e1", "the square reverses direction at the screen edge", "o1") if VAR_NR == 0
         emit_fact(0, MO_TB.i64(), "direction", d_fwd)
@@ -692,7 +692,7 @@ def emit_gold(scene_id: i32, dir: cstr, dur: i64) -> void:
     gold_write(dir, "truth.jsonl")
 
     # ---- probes.jsonl ----
-    txt_len <- 0
+    Encoder::txt_len <- 0
     if scene_id == 2:
         emit_probe("sm_count", "perception", "count", 0, dur, "How many moving objects are on the screen? Answer with a single number.", "1", "numeric", 0)
         emit_probe("sm_dir", "perception", "direction", 800, (MO_TB - 800).i64(), "Is the bright square moving to the left or to the right? Answer left or right.", d_fwd, "substring", 1000)
@@ -759,7 +759,7 @@ def main(argc: int, argv: u8&&) -> int:
                 if sg_streq(argv[ai], "--phase"):
                     if ai + 1 < argc:
                         ph: i32 = atoi(argv[ai + 1]).i32()
-                        PHASE_MS <- clamp_i32(ph, 0, 1900)
+                        PHASE_MS <- Encoder::clamp_i32(ph, 0, 1900)
                     ai <- ai + 2
                 else:
                     if sg_streq(argv[ai], "--variant"):
@@ -783,9 +783,9 @@ def main(argc: int, argv: u8&&) -> int:
 
     scene: u8& = argv[p[1.usize()]] if np >= 1 else "counter".cast[u8&]
     dir: cstr = argv[p[2.usize()]].cast[cstr] if np >= 2 else "/tmp/scenegen_out"
-    out_w: i32 = clamp_i32(atoi(argv[p[3.usize()]]).i32() if np >= 3 else 192, 8, MAX_OUT_W)
-    fps: i32 = clamp_i32(atoi(argv[p[4.usize()]]).i32() if np >= 4 else 10, 1, 60)
-    dur_ms: i64 = at_least(atoi(argv[p[5.usize()]]).i32() if np >= 5 else 20000, 1000).i64()
+    out_w: i32 = Encoder::clamp_i32(atoi(argv[p[3.usize()]]).i32() if np >= 3 else 192, 8, Encoder::MAX_OUT_W)
+    fps: i32 = Encoder::clamp_i32(atoi(argv[p[4.usize()]]).i32() if np >= 4 else 10, 1, 60)
+    dur_ms: i64 = Encoder::at_least(atoi(argv[p[5.usize()]]).i32() if np >= 5 else 20000, 1000).i64()
 
     # reserved-seed guard (V1.5): seeds >= 1000 are the held-out final-scoring pool
     if seed >= RESERVED_SEED and final == 0:
@@ -812,19 +812,19 @@ def main(argc: int, argv: u8&&) -> int:
     setup_scene_params(scene_id, seed)
 
     _ = mkdir(dir.cast[u8&], 493)
-    build_named_path(&LATEST_PATH[0], &LATEST_TMP[0], dir, "latest.txt")
+    Encoder::build_named_path(&Encoder::LATEST_PATH[0], &Encoder::LATEST_TMP[0], dir, "latest.txt")
 
-    out_h0: i32 = clamp_i32(out_w * SG_H / SG_W, 8, 256)
-    out_h: i32 = RING_STRIDE / out_w if out_w * out_h0 > RING_STRIDE else out_h0
+    out_h0: i32 = Encoder::clamp_i32(out_w * SG_H / SG_W, 8, 256)
+    out_h: i32 = Encoder::RING_STRIDE / out_w if out_w * out_h0 > Encoder::RING_STRIDE else out_h0
 
     token_cap: i32 = 40000
     cap_bytes: i32 = token_cap * 4
     retain: i32 = 100000                  # eval keeps the whole run
-    batch_frames: i32 = fps * 2 if fps * 2 <= MAX_BATCH_FRAMES else MAX_BATCH_FRAMES
+    batch_frames: i32 = fps * 2 if fps * 2 <= Encoder::MAX_BATCH_FRAMES else Encoder::MAX_BATCH_FRAMES
     frame_interval_ms: i64 = (1000 / fps).i64()
     total: i32 = (dur_ms * fps.i64() / 1000).i32()
 
-    archive_init(dir, 512)
+    Archive::archive_init(dir, 512)
     _ = printf("scenegen: rendering scene -> fixture (deterministic).\n".cast[u8&])
     batch: mutable i64 = 0
     f: mutable i32 = 0
@@ -833,15 +833,15 @@ def main(argc: int, argv: u8&&) -> int:
         while i < batch_frames and f < total:
             t_ms: i64 = f.i64() * frame_interval_ms
             render_scene(scene_id, t_ms)
-            archive_frame(&SCREEN_GRAB[0], SG_W, SG_H, t_ms)
-            downscale_into(&SCREEN_GRAB[0], SG_W, SG_H, out_w, out_h, i * RING_STRIDE)
-            write_frame_ppm(dir, batch, SG_W, SG_H) if i == 0
-            FRAME_MS[i.usize()] <- t_ms
+            Archive::archive_frame(&Encoder::SCREEN_GRAB[0], SG_W, SG_H, t_ms)
+            Encoder::downscale_into(&Encoder::SCREEN_GRAB[0], SG_W, SG_H, out_w, out_h, i * Encoder::RING_STRIDE)
+            Encoder::write_frame_ppm(dir, batch, SG_W, SG_H) if i == 0
+            Encoder::FRAME_MS[i.usize()] <- t_ms
             i <- i + 1
             f <- f + 1
-        _ = write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap, 1)
+        _ = Encoder::write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap, 1)
         batch <- batch + 1
-    archive_stop()
+    Archive::archive_stop()
     emit_gold(scene_id, dir, dur_ms)
     if seed >= 0:
         _ = printf("scenegen: seeded gold emitted (truth.jsonl + probes.jsonl).\n".cast[u8&])

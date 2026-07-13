@@ -57,57 +57,57 @@ def main(argc: int, argv: u8&&) -> int:
     requires argc >= 0
     dir: cstr = argv[1].cast[cstr] if argc >= 2 else "/tmp/screen_batches"
     _ = mkdir(dir.cast[u8&], 493)                  # 0o755; ignore EEXIST
-    build_named_path(&LATEST_PATH[0], &LATEST_TMP[0], dir, "latest.txt")
+    Encoder::build_named_path(&Encoder::LATEST_PATH[0], &Encoder::LATEST_TMP[0], dir, "latest.txt")
 
-    out_w: i32 = clamp_i32(arg_i32(argc, argv, 2, 192), 8, MAX_OUT_W)
-    fps: i32 = clamp_i32(arg_i32(argc, argv, 3, 24), 1, 60)
-    n_seconds: i32 = at_least(arg_i32(argc, argv, 4, 3), 1)
-    token_cap: i32 = at_least(arg_i32(argc, argv, 5, 40000), 2000)
-    retain: i32 = at_least(arg_i32(argc, argv, 6, 40), 1)
-    save_images: i32 = 1 if arg_i32(argc, argv, 7, 1) != 0 else 0
-    arch_mb: i32 = at_least(arg_i32(argc, argv, 8, 2048), 0)   # Tier A ring byte cap; 0 disables
+    out_w: i32 = Encoder::clamp_i32(Encoder::arg_i32(argc, argv, 2, 192), 8, Encoder::MAX_OUT_W)
+    fps: i32 = Encoder::clamp_i32(Encoder::arg_i32(argc, argv, 3, 24), 1, 60)
+    n_seconds: i32 = Encoder::at_least(Encoder::arg_i32(argc, argv, 4, 3), 1)
+    token_cap: i32 = Encoder::at_least(Encoder::arg_i32(argc, argv, 5, 40000), 2000)
+    retain: i32 = Encoder::at_least(Encoder::arg_i32(argc, argv, 6, 40), 1)
+    save_images: i32 = 1 if Encoder::arg_i32(argc, argv, 7, 1) != 0 else 0
+    arch_mb: i32 = Encoder::at_least(Encoder::arg_i32(argc, argv, 8, 2048), 0)   # Tier A ring byte cap; 0 disables
 
-    fail("frame_dump: cannot start capture (Screen Recording permission?)\n") return if screencap_start() == 0
-    fail("frame_dump: no frames arrived\n") return if screencap_wait_first_frame() == 0
-    sw: i32 = screencap_w()
-    sh: i32 = screencap_h()
-    fail("frame_dump: display too large\n") return if sw * sh > GRAB_CAP
-    screencap_log_dims()
-    screencap_install_sigint()
+    Encoder::fail("frame_dump: cannot start capture (Screen Recording permission?)\n") return if Screencap::screencap_start() == 0
+    Encoder::fail("frame_dump: no frames arrived\n") return if Screencap::screencap_wait_first_frame() == 0
+    sw: i32 = Screencap::screencap_w()
+    sh: i32 = Screencap::screencap_h()
+    Encoder::fail("frame_dump: display too large\n") return if sw * sh > Encoder::GRAB_CAP
+    Screencap::screencap_log_dims()
+    Screencap::screencap_install_sigint()
 
-    out_h0: i32 = clamp_i32(out_w * sh / sw, 8, 256)   # CHANGED[]/row arrays are 256 deep
-    out_h: i32 = RING_STRIDE / out_w if out_w * out_h0 > RING_STRIDE else out_h0
+    out_h0: i32 = Encoder::clamp_i32(out_w * sh / sw, 8, 256)   # CHANGED[]/row arrays are 256 deep
+    out_h: i32 = Encoder::RING_STRIDE / out_w if out_w * out_h0 > Encoder::RING_STRIDE else out_h0
 
     # 24fps caps n_seconds at ~10
-    batch_frames: i32 = fps * n_seconds if fps * n_seconds <= MAX_BATCH_FRAMES else MAX_BATCH_FRAMES
+    batch_frames: i32 = fps * n_seconds if fps * n_seconds <= Encoder::MAX_BATCH_FRAMES else Encoder::MAX_BATCH_FRAMES
     cap_bytes: i32 = token_cap * 4                 # ~4 bytes/token for this content
 
     _ = printf("frame_dump: delta-encoded batches -> directory. Ctrl-C to stop.\n".cast[u8&])
-    archive_init(dir, arch_mb)
-    start_ms: i64 = screencap_now_ms()
+    Archive::archive_init(dir, arch_mb)
+    start_ms: i64 = Screencap::screencap_now_ms()
     frame_interval_ms: i64 = (1000 / fps).i64()
     batch: mutable i64 = 0
-    while screencap_should_stop() == 0:
+    while Screencap::screencap_should_stop() == 0:
         # ---- fill one batch at the target fps ----
         i: mutable i32 = 0
-        next_ms: mutable i64 = screencap_now_ms()
-        while i < batch_frames and screencap_should_stop() == 0:
+        next_ms: mutable i64 = Screencap::screencap_now_ms()
+        while i < batch_frames and Screencap::screencap_should_stop() == 0:
             # pacing: sleep until this frame's deadline, then advance the deadline
-            now: mutable i64 = screencap_now_ms()
+            now: mutable i64 = Screencap::screencap_now_ms()
             while now < next_ms:
                 _ = usleep(((next_ms - now) * 1000).u32())
-                now <- screencap_now_ms()
+                now <- Screencap::screencap_now_ms()
             next_ms <- next_ms + frame_interval_ms
-            continue if screencap_grab(&SCREEN_GRAB[0], GRAB_CAP) == 0
-            archive_frame(&SCREEN_GRAB[0], sw, sh, screencap_now_ms() - start_ms)   # Tier A exact ring
-            downscale_into(&SCREEN_GRAB[0], sw, sh, out_w, out_h, i * RING_STRIDE)
-            write_frame_ppm(dir, batch, sw, sh) if save_images == 1 and i == 0
-            FRAME_MS[i.usize()] <- screencap_now_ms() - start_ms
+            continue if Screencap::screencap_grab(&Encoder::SCREEN_GRAB[0], Encoder::GRAB_CAP) == 0
+            Archive::archive_frame(&Encoder::SCREEN_GRAB[0], sw, sh, Screencap::screencap_now_ms() - start_ms)   # Tier A exact ring
+            Encoder::downscale_into(&Encoder::SCREEN_GRAB[0], sw, sh, out_w, out_h, i * Encoder::RING_STRIDE)
+            Encoder::write_frame_ppm(dir, batch, sw, sh) if save_images == 1 and i == 0
+            Encoder::FRAME_MS[i.usize()] <- Screencap::screencap_now_ms() - start_ms
             i <- i + 1
         continue if i == 0
-        _ = write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap, save_images)
+        _ = Encoder::write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap, save_images)
         batch <- batch + 1
-    archive_stop()
-    screencap_stop()
+    Archive::archive_stop()
+    Screencap::screencap_stop()
     _ = printf("frame_dump: stopped.\n".cast[u8&])
     return 0

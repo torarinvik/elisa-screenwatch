@@ -69,25 +69,25 @@ def decode_into_prev(kind: i64, plen: i64, n: i32) -> bool:
     if kind == 0 or kind == 1:
         got: mutable usize = 0
         trusted Unsafe.PointerCast:
-            got <- compression_decode_buffer((&AR_XOR[0]).cast[u8&], bytes, &AR_ENC[0], plen.usize(), null, AR_LZFSE)
+            got <- compression_decode_buffer((&Archive::AR_XOR[0]).cast[u8&], bytes, &Archive::AR_ENC[0], plen.usize(), null, Archive::AR_LZFSE)
         false return if got != bytes
     else:
         false return if plen != bytes.i64()
         trusted Unsafe.PointerCast:
-            src: u32& = (&AR_ENC[0]).cast[u32&]
+            src: u32& = (&Archive::AR_ENC[0]).cast[u32&]
             i: mutable i32 = 0
             while i < n:
-                AR_XOR[i.usize()] <- src[i.usize()]
+                Archive::AR_XOR[i.usize()] <- src[i.usize()]
                 i <- i + 1
     if kind == 0 or kind == 2:
         i: mutable i32 = 0
         while i < n:
-            AR_PREV[i.usize()] <- AR_XOR[i.usize()]
+            Archive::AR_PREV[i.usize()] <- Archive::AR_XOR[i.usize()]
             i <- i + 1
     else:
         i: mutable i32 = 0
         while i < n:
-            AR_PREV[i.usize()] <- AR_PREV[i.usize()] ^ AR_XOR[i.usize()]
+            Archive::AR_PREV[i.usize()] <- Archive::AR_PREV[i.usize()] ^ Archive::AR_XOR[i.usize()]
             i <- i + 1
     return true
 
@@ -95,8 +95,8 @@ def decode_into_prev(kind: i64, plen: i64, n: i32) -> bool:
 
 # Read arch_<seg>.idx into IDXBUF; returns its length or -1 if the segment does not exist.
 def load_idx(dir: cstr, seg: i64) -> i64:
-    ar_path(dir, seg, ".idx")
-    f0: void&? = fopen(&AR_PATH[0], "rb".cast[u8&])
+    Archive::ar_path(dir, seg, ".idx")
+    f0: void&? = fopen(&Archive::AR_PATH[0], "rb".cast[u8&])
     n: mutable i64 = -1
     if f0 is f:
         n <- fread(&IDXBUF[0], 1.usize(), 4194304.usize(), f).i64()
@@ -133,8 +133,8 @@ def reach_seg(dir: cstr, seg: i64, target: i64) -> i64:
     -1 return if not idx_range()
     -2 return if target < SEG_MIN
     0 return if target > SEG_MAX
-    ar_path(dir, seg, ".bin")
-    b0: void&? = fopen(&AR_PATH[0], "rb".cast[u8&])
+    Archive::ar_path(dir, seg, ".bin")
+    b0: void&? = fopen(&Archive::AR_PATH[0], "rb".cast[u8&])
     dims: mutable i64 = -1
     if b0 is bf:
         idx_pos <- 0
@@ -147,8 +147,8 @@ def reach_seg(dir: cstr, seg: i64, target: i64) -> i64:
             h: i64 = next_num()
             hash_hi: i64 = next_num()
             hash_lo: i64 = next_num()
-            break if w < 1 or h < 1 or w * h > AR_CAP_PX.i64() or plen < 1
-            got: usize = fread(&AR_ENC[0], 1.usize(), plen.usize(), bf)
+            break if w < 1 or h < 1 or w * h > Archive::AR_CAP_PX.i64() or plen < 1
+            got: usize = fread(&Archive::AR_ENC[0], 1.usize(), plen.usize(), bf)
             break if got.i64() != plen
             break if not decode_into_prev(kind, plen, (w * h).i32())
             if seq == target:
@@ -180,8 +180,8 @@ def verify_seg(dir: cstr, seg: i64) -> i64:
     -1 return if n < 0
     idx_len <- n
     idx_pos <- 0
-    ar_path(dir, seg, ".bin")
-    b0: void&? = fopen(&AR_PATH[0], "rb".cast[u8&])
+    Archive::ar_path(dir, seg, ".bin")
+    b0: void&? = fopen(&Archive::AR_PATH[0], "rb".cast[u8&])
     bad: mutable i64 = 0
     if b0 is bf:
         while idx_pos < idx_len:
@@ -193,13 +193,13 @@ def verify_seg(dir: cstr, seg: i64) -> i64:
             h: i64 = next_num()
             hash_hi: i64 = next_num()
             hash_lo: i64 = next_num()
-            break if w < 1 or h < 1 or w * h > AR_CAP_PX.i64() or plen < 1
-            got: usize = fread(&AR_ENC[0], 1.usize(), plen.usize(), bf)
+            break if w < 1 or h < 1 or w * h > Archive::AR_CAP_PX.i64() or plen < 1
+            got: usize = fread(&Archive::AR_ENC[0], 1.usize(), plen.usize(), bf)
             break if got.i64() != plen
             n2: i32 = (w * h).i32()
             ok: bool = decode_into_prev(kind, plen, n2)
             want: u64 = (hash_hi.u64() << 32) | hash_lo.u64()
-            if not (ok and ar_hash(&AR_PREV[0], n2) == want):
+            if not (ok and Archive::ar_hash(&Archive::AR_PREV[0], n2) == want):
                 bad <- bad + 1
                 emit("arch_tool: frame FAILED verification\n")
         _ = fclose(bf)
@@ -210,7 +210,7 @@ def verify_seg(dir: cstr, seg: i64) -> i64:
 
 # Write crop [x0,x0+cw) x [y0,y0+ch) of the AR_PREV frame (full dims fw x fh) as a P6 PPM.
 def write_ppm(path: u8&, fw: i32, fh: i32, x0i: i32, y0i: i32, cwi: i32, chi: i32) -> void:
-    return if fw < 1 or fh < 1 or fw * fh > AR_CAP_PX
+    return if fw < 1 or fh < 1 or fw * fh > Archive::AR_CAP_PX
     x0: mutable i32 = x0i
     y0: mutable i32 = y0i
     x0 <- 0 if x0 < 0
@@ -224,17 +224,17 @@ def write_ppm(path: u8&, fw: i32, fh: i32, x0i: i32, y0i: i32, cwi: i32, chi: i3
     if f0 is f:
         hdr: mutable array[u8, 64] = zeroed
         off: mutable i32 = 0
-        off <- ar_put_str(&hdr[0], off, "P6\n")
-        off <- ar_put_num(&hdr[0], off, cw.i64())
-        off <- ar_put_str(&hdr[0], off, " ")
-        off <- ar_put_num(&hdr[0], off, ch.i64())
-        off <- ar_put_str(&hdr[0], off, "\n255\n")
+        off <- Archive::ar_put_str(&hdr[0], off, "P6\n")
+        off <- Archive::ar_put_num(&hdr[0], off, cw.i64())
+        off <- Archive::ar_put_str(&hdr[0], off, " ")
+        off <- Archive::ar_put_num(&hdr[0], off, ch.i64())
+        off <- Archive::ar_put_str(&hdr[0], off, "\n255\n")
         _ = fwrite(&hdr[0], 1.usize(), off.usize(), f)
         y: mutable i32 = y0
         while y < y0 + ch:
             x: mutable i32 = x0
             while x < x0 + cw:
-                px: u32 = AR_PREV[(y * fw + x).usize()]
+                px: u32 = Archive::AR_PREV[(y * fw + x).usize()]
                 rgb: mutable array[u8, 3] = zeroed
                 rgb[0.usize()] <- ((px >> 16) & 255).u8()
                 rgb[1.usize()] <- ((px >> 8) & 255).u8()
@@ -246,22 +246,22 @@ def write_ppm(path: u8&, fw: i32, fh: i32, x0i: i32, y0i: i32, cwi: i32, chi: i3
 
 # Write a full-frame diff image: changed pixels red, unchanged pixels a dim grayscale of B (AR_PREV).
 def write_diff(path: u8&, fw: i32, fh: i32) -> void:
-    return if fw < 1 or fh < 1 or fw * fh > AR_CAP_PX
+    return if fw < 1 or fh < 1 or fw * fh > Archive::AR_CAP_PX
     f0: void&? = fopen(path, "wb".cast[u8&])
     if f0 is f:
         hdr: mutable array[u8, 64] = zeroed
         off: mutable i32 = 0
-        off <- ar_put_str(&hdr[0], off, "P6\n")
-        off <- ar_put_num(&hdr[0], off, fw.i64())
-        off <- ar_put_str(&hdr[0], off, " ")
-        off <- ar_put_num(&hdr[0], off, fh.i64())
-        off <- ar_put_str(&hdr[0], off, "\n255\n")
+        off <- Archive::ar_put_str(&hdr[0], off, "P6\n")
+        off <- Archive::ar_put_num(&hdr[0], off, fw.i64())
+        off <- Archive::ar_put_str(&hdr[0], off, " ")
+        off <- Archive::ar_put_num(&hdr[0], off, fh.i64())
+        off <- Archive::ar_put_str(&hdr[0], off, "\n255\n")
         _ = fwrite(&hdr[0], 1.usize(), off.usize(), f)
         n: i32 = fw * fh
         i: mutable i32 = 0
         while i < n:
             a: u32 = AR_CMP[i.usize()]
-            b: u32 = AR_PREV[i.usize()]
+            b: u32 = Archive::AR_PREV[i.usize()]
             rgb: mutable array[u8, 3] = zeroed
             if a != b:
                 rgb[0.usize()] <- 255
@@ -300,17 +300,17 @@ def cmd_replay(dir: cstr, s0: i64, s1: i64, stride0: i64, pfx: u8&) -> i64:
             fw: i32 = (d >> 16).i32()
             fh: i32 = (d & 65535).i32()
             off: mutable i32 = 0
-            off <- ar_put_str(&OUTP[0], off, pfx.cast[cstr])
-            off <- ar_put_num(&OUTP[0], off, s)
-            off <- ar_put_str(&OUTP[0], off, ".ppm")
+            off <- Archive::ar_put_str(&OUTP[0], off, pfx.cast[cstr])
+            off <- Archive::ar_put_num(&OUTP[0], off, s)
+            off <- Archive::ar_put_str(&OUTP[0], off, ".ppm")
             OUTP[off.usize()] <- 0
             write_ppm(&OUTP[0], fw, fh, 0, 0, fw, fh)
             count <- count + 1
         s <- s + stride
     off: mutable i32 = 0
-    off <- ar_put_str(&MSG[0], off, "arch_tool: replayed ")
-    off <- ar_put_num(&MSG[0], off, count)
-    off <- ar_put_str(&MSG[0], off, " frames\n")
+    off <- Archive::ar_put_str(&MSG[0], off, "arch_tool: replayed ")
+    off <- Archive::ar_put_num(&MSG[0], off, count)
+    off <- Archive::ar_put_str(&MSG[0], off, " frames\n")
     MSG[off.usize()] <- 0
     emit_buf(&MSG[0])
     return 0 if count > 0 else 1
@@ -325,7 +325,7 @@ def cmd_compare(dir: cstr, a: i64, b: i64, out: u8&, want_out: bool) -> i64:
     n: i32 = fw * fh
     i: mutable i32 = 0
     while i < n:
-        AR_CMP[i.usize()] <- AR_PREV[i.usize()]
+        AR_CMP[i.usize()] <- Archive::AR_PREV[i.usize()]
         i <- i + 1
     db: i64 = decode_seq(dir, b)
     if db < 0:
@@ -344,7 +344,7 @@ def cmd_compare(dir: cstr, a: i64, b: i64, out: u8&, want_out: bool) -> i64:
         x: mutable i32 = 0
         while x < fw:
             idx: i32 = y * fw + x
-            if AR_CMP[idx.usize()] != AR_PREV[idx.usize()]:
+            if AR_CMP[idx.usize()] != Archive::AR_PREV[idx.usize()]:
                 changed <- changed + 1
                 minx <- x if x < minx
                 miny <- y if y < miny
@@ -353,20 +353,20 @@ def cmd_compare(dir: cstr, a: i64, b: i64, out: u8&, want_out: bool) -> i64:
             x <- x + 1
         y <- y + 1
     off: mutable i32 = 0
-    off <- ar_put_str(&MSG[0], off, "arch_tool: changed=")
-    off <- ar_put_num(&MSG[0], off, changed)
-    off <- ar_put_str(&MSG[0], off, "/")
-    off <- ar_put_num(&MSG[0], off, n.i64())
+    off <- Archive::ar_put_str(&MSG[0], off, "arch_tool: changed=")
+    off <- Archive::ar_put_num(&MSG[0], off, changed)
+    off <- Archive::ar_put_str(&MSG[0], off, "/")
+    off <- Archive::ar_put_num(&MSG[0], off, n.i64())
     if changed > 0:
-        off <- ar_put_str(&MSG[0], off, " bbox=")
-        off <- ar_put_num(&MSG[0], off, minx.i64())
-        off <- ar_put_str(&MSG[0], off, ",")
-        off <- ar_put_num(&MSG[0], off, miny.i64())
-        off <- ar_put_str(&MSG[0], off, "-")
-        off <- ar_put_num(&MSG[0], off, maxx.i64())
-        off <- ar_put_str(&MSG[0], off, ",")
-        off <- ar_put_num(&MSG[0], off, maxy.i64())
-    off <- ar_put_str(&MSG[0], off, "\n")
+        off <- Archive::ar_put_str(&MSG[0], off, " bbox=")
+        off <- Archive::ar_put_num(&MSG[0], off, minx.i64())
+        off <- Archive::ar_put_str(&MSG[0], off, ",")
+        off <- Archive::ar_put_num(&MSG[0], off, miny.i64())
+        off <- Archive::ar_put_str(&MSG[0], off, "-")
+        off <- Archive::ar_put_num(&MSG[0], off, maxx.i64())
+        off <- Archive::ar_put_str(&MSG[0], off, ",")
+        off <- Archive::ar_put_num(&MSG[0], off, maxy.i64())
+    off <- Archive::ar_put_str(&MSG[0], off, "\n")
     MSG[off.usize()] <- 0
     emit_buf(&MSG[0])
     if want_out:

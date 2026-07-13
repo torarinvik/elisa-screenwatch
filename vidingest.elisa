@@ -82,9 +82,9 @@ def parse_two(s: u8&) -> bool:
 # ffprobe the first video stream's width,height into g_iw,g_ih.
 def probe_dims(video: cstr) -> bool:
     off: mutable i32 = 0
-    off <- u8buf_set_str(&VI_CMD[0], off, "ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 '")
-    off <- u8buf_set_str(&VI_CMD[0], off, video)
-    off <- u8buf_set_str(&VI_CMD[0], off, "'")
+    off <- Encoder::u8buf_set_str(&VI_CMD[0], off, "ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 '")
+    off <- Encoder::u8buf_set_str(&VI_CMD[0], off, video)
+    off <- Encoder::u8buf_set_str(&VI_CMD[0], off, "'")
     VI_CMD[off.usize()] <- 0
     p: void&? = popen(&VI_CMD[0], "r".cast[u8&])
     if p is fp:
@@ -99,22 +99,22 @@ def probe_dims(video: cstr) -> bool:
 def build_ffmpeg_cmd(video: cstr, t0: i32, dur: i32, ow: i32, oh: i32, fps: i32) -> void:
     requires ow >= 1 and oh >= 1 and fps >= 0
     off: mutable i32 = 0
-    off <- u8buf_set_str(&VI_CMD[0], off, "ffmpeg -nostdin -hide_banner -loglevel error -i '")
-    off <- u8buf_set_str(&VI_CMD[0], off, video)
-    off <- u8buf_set_str(&VI_CMD[0], off, "'")
+    off <- Encoder::u8buf_set_str(&VI_CMD[0], off, "ffmpeg -nostdin -hide_banner -loglevel error -i '")
+    off <- Encoder::u8buf_set_str(&VI_CMD[0], off, video)
+    off <- Encoder::u8buf_set_str(&VI_CMD[0], off, "'")
     if t0 > 0:
-        off <- u8buf_set_str(&VI_CMD[0], off, " -ss ")
-        off <- u8buf_set_num(&VI_CMD[0], off, t0.i64())
+        off <- Encoder::u8buf_set_str(&VI_CMD[0], off, " -ss ")
+        off <- Encoder::u8buf_set_num(&VI_CMD[0], off, t0.i64())
     if dur > 0:
-        off <- u8buf_set_str(&VI_CMD[0], off, " -t ")
-        off <- u8buf_set_num(&VI_CMD[0], off, dur.i64())
-    off <- u8buf_set_str(&VI_CMD[0], off, " -vf scale=")
-    off <- u8buf_set_num(&VI_CMD[0], off, ow.i64())
-    off <- u8buf_set_str(&VI_CMD[0], off, ":")
-    off <- u8buf_set_num(&VI_CMD[0], off, oh.i64())
-    off <- u8buf_set_str(&VI_CMD[0], off, ",fps=")
-    off <- u8buf_set_num(&VI_CMD[0], off, fps.i64())
-    off <- u8buf_set_str(&VI_CMD[0], off, " -pix_fmt bgra -f rawvideo -")
+        off <- Encoder::u8buf_set_str(&VI_CMD[0], off, " -t ")
+        off <- Encoder::u8buf_set_num(&VI_CMD[0], off, dur.i64())
+    off <- Encoder::u8buf_set_str(&VI_CMD[0], off, " -vf scale=")
+    off <- Encoder::u8buf_set_num(&VI_CMD[0], off, ow.i64())
+    off <- Encoder::u8buf_set_str(&VI_CMD[0], off, ":")
+    off <- Encoder::u8buf_set_num(&VI_CMD[0], off, oh.i64())
+    off <- Encoder::u8buf_set_str(&VI_CMD[0], off, ",fps=")
+    off <- Encoder::u8buf_set_num(&VI_CMD[0], off, fps.i64())
+    off <- Encoder::u8buf_set_str(&VI_CMD[0], off, " -pix_fmt bgra -f rawvideo -")
     VI_CMD[off.usize()] <- 0
 
 # Read exactly nbytes into dst, looping over short pipe reads. False at clean EOF / torn tail.
@@ -138,10 +138,10 @@ def main(argc: int, argv: u8&&) -> int:
     has_dir: bool = argc >= 3 and argv[2][0.usize()] != 45
     dir: cstr = argv[2].cast[cstr] if has_dir else "/tmp/vidingest_out"
 
-    fps: i32 = clamp_i32(flag_i32(argc, argv, "--fps", 10), 1, 60)
-    out_w: i32 = clamp_i32(flag_i32(argc, argv, "--width", 192), 8, MAX_OUT_W)
-    t0: i32 = at_least(flag_i32(argc, argv, "--t0", 0), 0)
-    dur: i32 = at_least(flag_i32(argc, argv, "--dur", 0), 0)
+    fps: i32 = Encoder::clamp_i32(flag_i32(argc, argv, "--fps", 10), 1, 60)
+    out_w: i32 = Encoder::clamp_i32(flag_i32(argc, argv, "--width", 192), 8, Encoder::MAX_OUT_W)
+    t0: i32 = Encoder::at_least(flag_i32(argc, argv, "--t0", 0), 0)
+    dur: i32 = Encoder::at_least(flag_i32(argc, argv, "--dur", 0), 0)
 
     if not probe_dims(video):
         _ = printf("vidingest: ffprobe failed (is ffmpeg installed? is the path correct?)\n".cast[u8&])
@@ -149,29 +149,29 @@ def main(argc: int, argv: u8&&) -> int:
 
     # decoded source resolution (capped to bound cost); ffmpeg scales to exactly ow x oh
     ow: i32 = g_iw if g_iw <= SRC_CAP_W else SRC_CAP_W
-    oh: i32 = g_ih if g_iw <= SRC_CAP_W else at_least(g_ih * SRC_CAP_W / g_iw, 1)
-    if ow < 1 or oh < 1 or ow * oh > GRAB_CAP:
+    oh: i32 = g_ih if g_iw <= SRC_CAP_W else Encoder::at_least(g_ih * SRC_CAP_W / g_iw, 1)
+    if ow < 1 or oh < 1 or ow * oh > Encoder::GRAB_CAP:
         _ = printf("vidingest: bad or too-large source resolution\n".cast[u8&])
         return 1
     frame_bytes: i32 = ow * oh * 4
 
     _ = mkdir(dir.cast[u8&], 493)                     # 0o755; ignore EEXIST
-    build_named_path(&LATEST_PATH[0], &LATEST_TMP[0], dir, "latest.txt")
+    Encoder::build_named_path(&Encoder::LATEST_PATH[0], &Encoder::LATEST_TMP[0], dir, "latest.txt")
 
-    out_h0: i32 = clamp_i32(out_w * oh / ow, 8, 256)
-    out_h: i32 = RING_STRIDE / out_w if out_w * out_h0 > RING_STRIDE else out_h0
+    out_h0: i32 = Encoder::clamp_i32(out_w * oh / ow, 8, 256)
+    out_h: i32 = Encoder::RING_STRIDE / out_w if out_w * out_h0 > Encoder::RING_STRIDE else out_h0
 
     token_cap: i32 = 40000
     cap_bytes: i32 = token_cap * 4
     retain: i32 = 100000                              # eval keeps the whole run
-    batch_frames: i32 = fps * 2 if fps * 2 <= MAX_BATCH_FRAMES else MAX_BATCH_FRAMES
+    batch_frames: i32 = fps * 2 if fps * 2 <= Encoder::MAX_BATCH_FRAMES else Encoder::MAX_BATCH_FRAMES
     frame_interval_ms: i64 = (1000 / fps).i64()
 
     assert(fps >= 1)                                   # clamp_i32(.., 1, 60) guarantees this
     build_ffmpeg_cmd(video, t0, dur, ow, oh, fps)
     src: void&? = popen(&VI_CMD[0], "r".cast[u8&])
     if src is fp:
-        archive_init(dir, 2048)
+        Archive::archive_init(dir, 2048)
         _ = printf("vidingest: decoding video -> batches (deterministic, segment-relative time).\n".cast[u8&])
         batch: mutable i64 = 0
         f: mutable i64 = 0
@@ -181,21 +181,21 @@ def main(argc: int, argv: u8&&) -> int:
             while i < batch_frames and not eof:
                 ok: mutable bool = false
                 trusted Unsafe.PointerCast:
-                    ok <- read_full((&SCREEN_GRAB[0]).cast[u8&], frame_bytes, fp)
+                    ok <- read_full((&Encoder::SCREEN_GRAB[0]).cast[u8&], frame_bytes, fp)
                 eof <- true if not ok
                 if ok:
                     t_ms: i64 = f * frame_interval_ms
-                    archive_frame(&SCREEN_GRAB[0], ow, oh, t_ms)
-                    downscale_into(&SCREEN_GRAB[0], ow, oh, out_w, out_h, i * RING_STRIDE)
-                    write_frame_ppm(dir, batch, ow, oh) if i == 0
-                    FRAME_MS[i.usize()] <- t_ms
+                    Archive::archive_frame(&Encoder::SCREEN_GRAB[0], ow, oh, t_ms)
+                    Encoder::downscale_into(&Encoder::SCREEN_GRAB[0], ow, oh, out_w, out_h, i * Encoder::RING_STRIDE)
+                    Encoder::write_frame_ppm(dir, batch, ow, oh) if i == 0
+                    Encoder::FRAME_MS[i.usize()] <- t_ms
                     i <- i + 1
                     f <- f + 1
             if i > 0:
-                _ = write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap, 1)
+                _ = Encoder::write_batch_dir(dir, batch, i, out_w, out_h, fps, cap_bytes, retain, token_cap, 1)
                 batch <- batch + 1
         _ = pclose(fp)
-        archive_stop()
+        Archive::archive_stop()
         _ = printf("vidingest: done.\n".cast[u8&])
         return 0
     _ = printf("vidingest: could not launch ffmpeg\n".cast[u8&])
