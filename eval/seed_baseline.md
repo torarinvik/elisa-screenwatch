@@ -113,3 +113,33 @@ Scored as a metamorphic pair (relation_grounding == the launch/early-launch pair
 - V1.8 confidence-blind audit: grep-verified that NO matcher consumes a `conf` field for credit
   (track_probe parses conf into its event tuples but no op reads it; score_memory, audio_probe,
   vlm_probe never touch it). Confidence remains an eval OUTPUT (V3.5 calibration), never an input.
+
+## VLM metamorphic acceptance (V1.9) — 2026-07-13
+
+Runner: `eval/meta_vlm.sh 0 2 8`. The V1.2 metamorphic-pair law (a flip probe is credited only
+when answered correctly on BOTH sides of the base/variant pair) applied with the **Qwen2.5-VL-3B**
+as the answerer (`vlm_probe.py`) instead of the symbolic tracker. Each fixture's probes are filtered
+to the pair's flip probe(s) to bound cost (the VLM reloads per probe, ~13 s); paraphrase index is
+rotated by seed (V1.7 `q_alt`) so phrasing varies 0/1/2 across the sweep.
+
+| pair | flip probes | score |
+|---|---|---|
+| motion / no-reverse | sm_rev | 0/3 |
+| motion-trap / no-vanish | st_gap, st_cont | 0/6 |
+| motion-trap / no-reverse | st_rev | 0/3 |
+| launch / early-launch | rl_order | 0/3 |
+| **vlm_metamorphic_sensitivity** | | **0/15 (0%)** |
+
+**Finding — a pure prior, not perception.** On every yes/no event question (reversal, vanish-gap,
+continuity, launch-order) the VLM answered a constant **"No."** on BOTH sides of BOTH the base and
+variant, invariant to seed and to paraphrase. Pair credit therefore scores 0: the answer carries
+no information about the frames. The symbolic tracker scores 55/55 on the identical probes (V1.2),
+so the pairs are answerable — this is a model failure, not an impossible test. This is exactly the
+leak the metamorphic instrument was built to catch; it is a MEASUREMENT, not a pass/fail bar.
+
+Frame-density control: re-running the base fixtures at 32 frames (4× the 8-frame sweep) still
+returns "No." on sm_rev / st_gap / st_cont — the prior is not frame-starvation, so denser sampling
+does not rescue it. (Open-ended probes fare no better: `pm_count` gold 1 → "2", `pm_dir` gold right
+→ "left" — the downscaled synthetic scenes are out-of-distribution for the 3B model.) The takeaway
+for the orchestra: the VLM cannot be trusted as a motion/event authority on these inputs; the
+symbolic members remain the authority, and V5 (VLM cross-exam) inherits this as its "before" line.
