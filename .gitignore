@@ -10,3 +10,7 @@ scenegen
 .venv-vlm/
 __pycache__/
 *.pyc
+tracker
+audiogen
+audiotriage
+audiocap
