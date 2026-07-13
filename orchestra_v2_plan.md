@@ -1,6 +1,19 @@
 # Orchestra v2 — symbolic tracks, audio, model auditions, evidence ledger
 
-Status: PLANNED (M1–M9). Successor to `cursor_vlm_plan.md` (COMPLETE).
+Status: **M1–M3 COMPLETE** (viola tracker built, trap-suite green, integrated); M4–M9 planned.
+Successor to `cursor_vlm_plan.md` (COMPLETE).
+
+**Progress:**
+- **M1 ✓** `tracker.elisa` (commit 5eba2dc) — model-free object tracker: grid reconstruction →
+  foreground connected components → persistent tracks (ACTIVE/LOST/ENDED) → I9-structural OBS/INF
+  records. Reproduces the by-hand centroid analysis on motion/motion-trap; deterministic.
+- **M2 ✓** trap suite (commit c9d285b) — 4 scenegen scenes + `track_probe.py`/`track_test.sh` +
+  occlusion reasoning. **motion 100% (VLM 50%), motion-trap 100% (VLM 25%)**, crossing-swap 100%,
+  occlude-vanish 100% — all deterministic, 0% confab. Measured limits recorded (id-through-occlusion,
+  merge, textured-bg → need appearance model / SHIFT path — deferred).
+- **M3 ✓** integration — SPEC I9 + viola member + tracker CLI contract + evidence-family rule + `track`
+  cursor verb; watcher_protocol v3.2 (routing: motion → `track` first). Bass `TRACKS` summary line
+  deferred (measure encoder-loop cost first — do not slow capture).
 
 ## Why this plan
 

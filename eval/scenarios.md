@@ -73,7 +73,8 @@ Each scenario targets one failure mode. `src` = how it's produced (`real` now, `
 |---|----------|-----|---------|-----------|
 | 1 | small-text | real | grid+OCR legibility of fine text | perception: read a small label verbatim |
 | 2 | scrolling-code | real | SHIFT tracking; identity through scroll | event: "did line X pass?"; perception: current top line |
-| 3 | motion / motion-trap | synth ✓ | VLM (violin) motion perception vs priors | perception: direction/position/count; traps: vanish, mid-field reversal, continuity |
+| 3 | motion / motion-trap | synth ✓ | violin (VLM) *and* viola (tracker) motion perception vs priors | perception: direction/position/count; traps: vanish, mid-field reversal, continuity |
+| 3t | crossing-swap / occlude-vanish | synth ✓ | viola (tracker) identity: crossing, occlusion vs vanish | count; opposite-motion; occluded-inference; documented id-through-occlusion limit |
 | 4 | brief-object | synth | transient visible only K frames | event: "did a red box appear?"; occlusion after |
 | 5 | one-digit-counter | synth ✓ | small localized perception + change | perception at several t; retention of an early value |
 | 5t | counter-skip (trap) | synth ✓ | perceiving vs GUESSING | perception at batches 3,7 where the pattern breaks (7 and 3, swapped) |
@@ -140,6 +141,44 @@ edge). Perception ↑ better, confabulation ↓ better:
   **untrusted** — they may only raise an OPEN_QUESTION a symbolic verb (`compare`/churn) must
   resolve, and may never become a `story.md` EVENT. Reproduce: `eval/trap_test.sh motion` /
   `motion-trap` (add `MODEL=Qwen/Qwen2.5-VL-7B-Instruct` for the 7B audition).
+
+## Tracker trap-test (viola) — the symbolic answer to the traps the VLM failed
+
+The viola (`tracker.elisa`, model-free) is put on trial by the SAME probes as the violin —
+`eval/track_test.sh <scene>`, one symbolic pass over the whole run, deterministic. Where the VLM
+prior-filled, the tracker measures. Directly comparable to the VLM table above:
+
+| scene | member | perception | confab | reconstruction |
+|---|---|---|---|---|
+| motion | violin (VLM 3B) | 50% | 50% | — |
+| motion | **viola (tracker)** | **100%** | **0%** | 100% |
+| motion-trap | violin (VLM 3B/7B) | 25% | 75% | — |
+| motion-trap | **viola (tracker)** | **100%** | **0%** | 100% |
+| crossing-swap | viola (tracker) | 100% | 0% | 100% |
+| occlude-vanish | viola (tracker) | 100% | 0% | 100% |
+
+- **The traps the VLM failed are trivial symbolically.** motion-trap: the tracker reports the
+  2-second vanish (a `ncomp=0` gap at t=8000–9900 + a `VANISH` event), the mid-field reversal
+  (`REVERSE` at cx=134/192 ≈ 0.70 → "middle", not an edge), discontinuity (two track segments), and
+  count=1 (never two objects at once). All four the VLM missed by prior-fill.
+- **OBSERVED vs INFERRED is structural (I9).** `OBS comp`/`OBS frame` state only what a deterministic
+  computation measured; every cross-frame claim (`INF track` association, `INF event`
+  APPEAR/VANISH/REVERSE/REACQUIRE/OCCLUDED) carries a confidence. The tracker never launders an
+  uncertain association into certainty — a track may legitimately end rather than guess.
+- **Occlusion vs vanish discrimination works at the event level.** occlude-vanish: the lower square's
+  open-field disappearance is a `VANISH` (t=9200, LOST_MAX); the upper square merging with a static
+  block is inferred `OCCLUDED` (conf 55, extended patience).
+
+**Measured limits (recorded, not hidden — the trap suite doing its job).** Pure foreground
+connected-component segmentation cannot: (a) maintain identity through a *long same-colour occlusion*
+— in occlude-vanish the upper square re-emerges as a NEW id, because its velocity is corrupted at the
+merge boundary and the coasted prediction overshoots (event-level OCCLUDED/VANISH is right; id-level
+REACQUIRE is not); (b) maintain identity through a *full same-lane merge* (contact-merge fragments to
+new ids); (c) segment a *textured/scrolling background* (scroll-motion — no dominant background, so
+mode-background treats every stripe as an object). These need an appearance model / Kalman prediction
+/ the changed-cell+SHIFT camera path — **deferred**, not pretended. Honest identity behaviour through
+a crossing is *acceptable UNKNOWN*: crossing-swap resolves two oppositely-moving objects but does not
+claim a confident (wrong) identity swap. Reproduce: `eval/track_test.sh motion-trap`.
 
 ## Integration dry-run (M4) — the describe loop on real content
 

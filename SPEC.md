@@ -18,6 +18,13 @@ A member may be rewritten freely; these contracts may only change with a version
   it must carry the exact archive seq span it actually saw; it may never override a symbolic member's
   measurement (an `ocr`/`compare` result contradicting the VLM wins); and it enters memory only per the
   **describe trust policy** (below), which is filled in by the Phase-3 trap-test, not assumed.
+- **I9** OBSERVED vs INFERRED is structural, for symbolic members too. The viola (`tracker`) emits
+  `OBS` records (a component existed with these cells/bbox/centroid — a deterministic measurement, no
+  identity, no cross-frame claim) and `INF` records (every cross-frame claim: association, and the
+  events APPEAR/VANISH/REVERSE/REACQUIRE/OCCLUDED), each `INF` carrying a confidence. A track may
+  report `UNKNOWN` identity or legitimately end rather than guess — laundering an uncertain
+  association into a confident one is the symbolic member's version of VLM prior-fill and is a bug.
+  Confidences are placeholders until the trap suite calibrates them (see the tracker trust policy).
 
 ## Members
 
@@ -26,6 +33,7 @@ A member may be rewritten freely; these contracts may only change with a version
 | Drums | delta encoder (`frame_dump`, Elisa) | symbolic, always-on |
 | Bass | ACTIVITY triage (inside `frame_dump`) | symbolic, per batch |
 | Guitar | `screenocr` (Swift/Vision CLI) | symbolic, on-demand + scene-change |
+| Viola | `tracker` (Elisa, delta-stream object identity) | symbolic, on-demand (boss-dispatched) |
 | Violin | `screenvlm` (Qwen2.5-VL-3B, local) | neural, on-demand (boss-dispatched) |
 | Singer | stream watcher (cheap LLM agent) | neural, event-woken |
 | Boss | orchestrator (stronger LLM agent) | neural, escalation-woken |
@@ -129,6 +137,43 @@ stdout: one line per recognized string: `<x> <y> <w> <h> <conf> <text>` (pixel c
 FULL image's space even when cropped; conf 0–1). Exit 0 on success, 1 on unreadable image.
 `batch_<n>.ocr.txt` holds the full-frame output for that batch's jpg.
 
+## tracker CLI contract (the viola — symbolic object-identity member)
+
+Answers *where things moved and whether they are the same thing over time* — the motion predicates a
+VLM prior-fills (I8) and OCR/compare can't phrase. Model-free, deterministic, dependency-free; it
+reconstructs each frame's grid from the delta stream and threads foreground components into persistent
+tracks. A symbolic member, so its output is the authority over any `describe` motion claim (I1/I8).
+
+```
+tracker run   <batch_dir>       process batch_0.txt, batch_1.txt, … in order (tracks persist across)
+tracker batch <file.txt>        process a single batch file
+```
+stdout — line records, OBSERVED vs INFERRED structural (I9):
+```
+OBS frame t=<ms> ncomp=<n> dw=<cells>              a deterministic per-frame component count
+OBS comp  t=<ms> cx=<> cy=<> area=<> bbox=<a,b,c,d> a component existed (grid cells) — no identity
+INF track t=<ms> id=<> cx=<> cy=<> vx=<> dir=<+1|-1|0> state=<A|L> conf=<>   this comp == track id
+INF event id=<> kind=<APPEAR|VANISH|REVERSE|REACQUIRE|OCCLUDED> t=<ms> cx=<> cy=<> conf=<>
+```
+Exit 0 success; 1 no batches found; 2 bad args. Coordinates are grid cells (map to pixels via the
+grid↔pixel mapping). Deterministic: identical input ⇒ byte-identical output (the repro gate).
+
+- **Pipeline:** grid reconstruction (keyframe + delta ROWS/SHIFT) → mode-background foreground →
+  4-connected components → gated nearest-centroid association (constant-velocity prediction) →
+  ACTIVE→LOST→ENDED lifecycle. A LOST track overlapping a static, ≥-as-large track is inferred
+  OCCLUDED (extended patience, may REACQUIRE); one lost in the open field VANISHes after LOST_MAX.
+  Reversals use peak-detection with hysteresis.
+- **tracker trust policy — MEASURED (M2 trap suite).** Trusted (100% perception, 0% confab,
+  deterministic, reconstruction 1.0): object *count* (peak concurrent), *direction* over a span,
+  *reversal presence + zone* (edge vs mid-field), *position*, *vanish/discontinuity* (`ncomp=0`
+  gaps + VANISH), and *occlusion inference* (OCCLUDED event) — the exact predicates the violin missed
+  (motion 50%→100%, motion-trap 25%→100%). **Measured LIMITS** (foreground connected-components,
+  recorded not hidden): identity through a long same-colour occlusion or a full same-lane merge is NOT
+  maintained (re-emerges as a new id — event-level OCCLUDED/VANISH is right, id-level REACQUIRE is
+  not); textured/scrolling backgrounds defeat mode-background segmentation. These need an appearance
+  model / Kalman prediction / the changed-cell+SHIFT camera path — deferred. Identity through a
+  crossing is honest UNKNOWN (no confident wrong swap). Reproduce: `eval/track_test.sh motion-trap`.
+
 ## screenvlm CLI contract (the violin — local video-VLM member)
 
 Answers *what happens* during a recorded time span, for non-textual motion content the symbolic
@@ -163,7 +208,7 @@ reason on stderr (distinct message, so the boss separates "pruned" from "error")
 ## The cursor — unified active perception
 
 The **cursor** is the agent-controlled attention pointer `(time-span, region, question-kind)` over the
-recorded sequence. Four verbs answer at three rates; every answer carries an evidence pointer into the
+recorded sequence. Five verbs answer at three rates; every answer carries an evidence pointer into the
 Tier-A ring, so any neural claim is re-groundable and confab-scorable:
 
 | verb | member | answers | kind |
@@ -171,11 +216,26 @@ Tier-A ring, so any neural claim is re-groundable and confab-scorable:
 | `show`     | arch_tool + vision-read | what does (t, region) look like, exactly | symbolic decode |
 | `ocr`      | arch-ocr.sh (screenocr) | what text is at (t, region) | symbolic |
 | `compare`  | arch_tool | did region R change between t1,t2 (count + bbox, exact) | symbolic |
-| `describe` | screenvlm | what happens during [t0,t1] — motion, causality, events | **neural** |
+| `track`    | tracker | what moved during [t0,t1] — count, direction, reversal, vanish, occlusion | symbolic |
+| `describe` | screenvlm | what happens during [t0,t1] — semantics, causality, text/scene | **neural** |
 
 Three-rate perception, one instrument: always-on symbolic stream for monitoring → exact tools for
-text/change verification → VLM for event semantics. The always-on channel stays symbolic; `describe`
-is the boss's budgeted deep-attention verb (the singer never calls it — see watcher_protocol).
+text/change/motion verification → VLM for event semantics. The always-on channel stays symbolic;
+`track` and `describe` are the boss's budgeted deep-attention verbs (the singer never calls them — see
+watcher_protocol).
+
+**Motion questions route to `track` first.** Any question about direction, (dis)appearance, reversal
+location, motion continuity, or moving-object count is a symbolic measurement (I1/I8/I9): the boss
+dispatches `track`, and a `describe` motion claim may at most *corroborate* it, never stand alone.
+`describe` owns semantics/text; `track` owns motion; where they overlap, `track` is the authority.
+
+**Evidence-family weighting.** Each witness carries a family tag (`symbolic-tracker`, `ocr`,
+`qwen-visual`, `audio`). Agreement *within* a family already measured-untrusted for the claim type
+adds ≈ 0 confidence (e.g. two Qwen-lineage VLMs agreeing on a motion predicate — Marlin-2B is a
+Qwen fine-tune, so it and screenvlm are ONE witness, not two); within a partially-trusted family,
+modest; *across* families (a tracker centroid + an OCR string + an audio transient), substantial. A
+claim graduates to a `story.md` EVENT only with evidence appropriate to its type — for motion, that
+means a `symbolic-tracker` (or `compare`) witness.
 
 ### describe trust policy (I8) — MEASURED (Phase-3 trap-test)
 
@@ -203,8 +263,8 @@ offline-audition only (it did not clear the traps and is too heavy to run beside
 ```markdown
 # Query <id>
 question: <one specific question>
-type: temporal | spatial | zoom | describe
-span: <t0,t1 in ms>            # describe only (the clip to interpret)
+type: temporal | spatial | zoom | track | describe
+span: <t0,t1 in ms>            # track/describe (the clip to analyse/interpret)
 region: <x,y,w,h>             # optional, describe/zoom (source pixels)
 evidence: [batch <b> f<i> rows <a>-<b>] | [arch seq <s0>..<s1> t=<t0>..<t1>]
 budget: <max sub-watcher dispatches>   # for describe: max screenvlm invocations

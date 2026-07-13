@@ -1,4 +1,4 @@
-# Screen-watcher protocol v3.1 — structured visuospatial memory
+# Screen-watcher protocol v3.2 — structured visuospatial memory
 
 The watcher (the orchestra's *singer*) is a cheap, short-lived LLM agent that reads the
 delta-encoded batch stream and maintains an *external, structured* understanding of the screen.
@@ -18,6 +18,18 @@ non-textual motion content the symbolic stream can only report as statistics. Tw
 **Inferred-only** and evidence-pinned (I8). The Phase-3 trap-test measured its confab profile (SPEC
 "describe trust policy"): text/scene claims are usable Inferred hypotheses, spatial-motion claims are
 untrusted and need symbolic corroboration.
+
+**What changed in v3.2.** The cursor gains a **symbolic** motion verb, `track`, backed by the *viola*
+(`tracker`, model-free, deterministic — SPEC "tracker CLI contract"). It measures object count,
+direction, reversal (edge vs mid-field), vanish/discontinuity, and occlusion from the delta stream —
+the exact predicates the trap-test proved the VLM prior-fills. **Routing rule:** any *motion*
+question (direction, (dis)appearance, reversal location, continuity, moving-object count) goes to
+`track` first; a `describe` motion claim may only *corroborate* the tracker, never stand alone, and
+may never become a `story.md` EVENT on the VLM's word (I8/I9). `track`, like `describe`, is a
+boss-budgeted verb the singer never calls. Its OBSERVED/INFERRED split is structural (I9); its trap-
+measured trust policy (SPEC "tracker trust policy") tells the boss which of its claims are load-bearing
+(count/direction/reversal/vanish/occlusion) vs the documented limits (identity through long occlusion
+or merge — the tracker honestly reports UNKNOWN/new-id rather than a confident wrong association).
 
 ## The memory hierarchy (3 tiers)
 
@@ -195,15 +207,19 @@ why: <one line tying it to the goal>
 1. Read goal.md, story.md, state.md, log.md tail, escalation.md.
 2. If goal-relevant: formulate ≤ 2 SPECIFIC questions → write `queries/q_<id>.md` per SPEC.md
    → dispatch a cheap sub-watcher per query. Pick the query `type` by what the question needs:
-   `zoom`/`ocr` for text, `compare` to confirm a claimed change at the pixel, and **`describe`** (the
-   violin) for *what happens* in a motion span — set `span: t0,t1` (+ optional `region`).
+   `zoom`/`ocr` for text, `compare` to confirm a claimed change at the pixel, **`track`** (the viola)
+   for *what moved* in a span (count/direction/reversal/vanish/occlusion — the authority on motion),
+   and **`describe`** (the violin) for *what it means* (semantics/scene/text). Motion questions go to
+   `track` first; reach for `describe` for semantics, or to corroborate — never for a bare motion fact.
 3. On answers: append a boss-attributed EVENT to log.md; if durable, reflect it in story.md via the
-   consolidator; update goal.md sub-goals if warranted; clear the escalation. A `describe` answer is
-   INFERRED (I8, MEASURED trust policy in SPEC): a **text/scene** claim may seed a HYPOTHESIS or
-   answer the question (never overriding `ocr`/`compare`); a **spatial-motion** claim (direction,
-   (dis)appearance, reversal location, continuity, moving-object count) is **untrusted** — raise it as
-   an OPEN_QUESTION and resolve it with `compare`/churn before any EVENT. A describe claim never
-   becomes a story.md EVENT on the VLM's word alone.
+   consolidator; update goal.md sub-goals if warranted; clear the escalation. A `track` answer is a
+   symbolic measurement (I9): its trusted predicates (count, direction, reversal zone, vanish,
+   occlusion — SPEC "tracker trust policy") may become an EVENT directly; its `INF` events carry
+   confidence and its documented limits (identity through long occlusion/merge) stay OPEN_QUESTIONs.
+   A `describe` answer is INFERRED (I8): a **text/scene** claim may seed a HYPOTHESIS or answer the
+   question (never overriding `ocr`/`compare`/`track`); a **spatial-motion** claim is **untrusted** —
+   resolve it with `track`/`compare` before any EVENT. Neither VLM text nor an unresolved motion guess
+   becomes a story.md EVENT on the neural member's word alone.
 4. Hard stops: ≤ 3 queries per escalation; `evidence-exhausted`/`pruned` answers go to an
    OPEN_QUESTION in state.md and are never re-asked for the same event.
 
@@ -211,7 +227,11 @@ why: <one line tying it to the goal>
 
 Read the query file; execute by type (SPEC.md): temporal = close-read the pointed batch range;
 spatial = read only the pointed keyframe rows; zoom = map rows→pixels via SPEC.md's formula and run
-`screenocr batch_<b>.jpg --crop x,y,w,h`; **describe** = run
+`screenocr batch_<b>.jpg --crop x,y,w,h`; **track** = run `tracker run <batch_dir>` (or `batch
+<file>`), read the OBS/INF records over the query span, and answer the motion predicate from them —
+the trusted claims (count/direction/reversal/vanish/occlusion) go under **OBSERVED** for `OBS` records
+and **INFERRED** for `INF` events (with their conf), and the evidence pointer is the seq/t of the
+records; **describe** = run
 `screenvlm <batch_dir> --span t0,t1 [--region x,y,w,h] --q "<question>"`, then copy its `ANSWER` as
 the finding under **INFERRED** and its `EVIDENCE` line verbatim as the evidence pointer — never
 promote VLM text to OBSERVED (I8). Map screenvlm's exit: partial answer (`partial=true`) → status
