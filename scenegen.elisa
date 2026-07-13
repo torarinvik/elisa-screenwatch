@@ -109,6 +109,7 @@ global mutable RNG_S: u64 = 1
 # correct on BOTH sides of the pair — a prior-driven answer that ignores the pixels scores 0.
 global mutable VAR_NV: i32 = 0                # no-vanish: motion-trap gap becomes a visible glide
 global mutable VAR_NR: i32 = 0                # no-reverse: hold at the reversal point instead
+global mutable VAR_EL: i32 = 0                # early-launch: launch scene, B departs BEFORE contact
 global mutable SK_I: i32 = 3                  # counter-skip: the two swapped positions
 global mutable SK_J: i32 = 7
 
@@ -173,6 +174,17 @@ global mutable SM_DX: i32 = 460
 global mutable CM_D: i32 = 230
 global mutable CM_Y: i32 = 170
 
+# launch (V1.3b relation probe): A approaches static B and "launches" it at contact (base) —
+# or B departs EL ms BEFORE contact (--variant early-launch: effect precedes cause). Lanes are
+# OFF px apart so bboxes overlap by OL px at contact without sharing grid cells (crossing-swap
+# geometry). TC = contact time.
+global mutable LA_Y: i32 = 170
+global mutable LA_OFF: i32 = 8
+global mutable LA_BX: i32 = 430
+global mutable LA_OL: i32 = 10
+global mutable LA_TC: i32 = 10000
+global mutable LA_EL: i32 = 2000
+
 # Derive the active scene's parameters from the seed (no-op when unseeded). Ranges are documented
 # against the constraint they protect.
 def setup_scene_params(scene_id: i32, seed: i64) -> void:
@@ -182,6 +194,7 @@ def setup_scene_params(scene_id: i32, seed: i64) -> void:
     MT_Y <- SG_H / 2 - SQ / 2
     CS_YC <- SG_H / 2 - SQ / 2
     CM_Y <- SG_H / 2 - SQ / 2
+    LA_Y <- SG_H / 2 - SQ / 2
     return if seed < 0
     RNG_S <- (seed + 1).u64()             # nonzero state; distinct seeds -> distinct streams
     w: mutable i32 = 0
@@ -259,6 +272,15 @@ def setup_scene_params(scene_id: i32, seed: i64) -> void:
         ol: i32 = rnd(18, 42)                 # overlap depth at the meet
         CM_D <- (500 - sq7 + ol) / 2
         CM_Y <- rnd(60, 340 - sq7)
+    if scene_id == 8:
+        sq8: i32 = rnd(44, 72)
+        SQ <- sq8
+        LA_Y <- rnd(70, 320 - sq8)            # both lanes (Y±OFF) stay well inside the field
+        LA_OFF <- rnd(5, 10)
+        LA_BX <- rnd(380, 480)
+        LA_OL <- rnd(6, 12)
+        LA_TC <- rnd(8000, 11000)
+        LA_EL <- rnd(1500, 2500)
 
 # t -> batch index (2s batches, clamped 0..9)
 def batch_of(t_ms: i64) -> i32:
@@ -424,6 +446,23 @@ def scene_contact_merge(t_ms: i64) -> void:
     draw_square_at(ax.i32(), CM_Y, 15790320)
     draw_square_at(bx.i32(), CM_Y, 15790320)
 
+# launch: A (upper lane, near-white) moves right and stops overlapping static B (lower lane,
+# mid-grey) at t=TC; B departs rightward at 60 px/s from t=TB (TB=TC base; TB=TC-EL under
+# early-launch — the causeless departure a continuity-prior would smooth over).
+def scene_launch(t_ms: i64) -> void:
+    fill_bg(2105376)
+    ax_end: i32 = LA_BX - SQ + LA_OL
+    tt: i64 = t_ms if t_ms < LA_TC.i64() else LA_TC.i64()
+    ax: i64 = 40 + ((ax_end - 40).i64() * tt) / LA_TC.i64()
+    tb: i64 = (LA_TC - LA_EL).i64() if VAR_EL == 1 else LA_TC.i64()
+    bx: mutable i64 = LA_BX.i64()
+    if t_ms > tb:
+        bx <- LA_BX.i64() + ((t_ms - tb) * 60) / 1000
+        bmax: i64 = (SG_W - SQ).i64()
+        bx <- bmax if bx > bmax
+    draw_square_at(ax.i32(), LA_Y - LA_OFF, 15790320)     # A near-white
+    draw_square_at(bx.i32(), LA_Y + LA_OFF, 10066329)     # B mid-grey
+
 def render_scene(scene_id: i32, t_ms: i64) -> void:
     if scene_id == 1:
         scene_counter_skip(t_ms)
@@ -446,7 +485,10 @@ def render_scene(scene_id: i32, t_ms: i64) -> void:
                             if scene_id == 7:
                                 scene_contact_merge(t_ms)
                             else:
-                                scene_counter(t_ms)
+                                if scene_id == 8:
+                                    scene_launch(t_ms)
+                                else:
+                                    scene_counter(t_ms)
 
 # ---- seeded gold emission (V1.5): the generator annotates its own fixture ----------------------
 #
@@ -530,6 +572,41 @@ def emit_probe_dig(id: cstr, ask_t: i64, q: cstr, d: i32, fact_t: i64) -> void:
     txt_byte(125)
     txt_byte(10)
 
+# one relation probe (V1.3b): emit_probe plus an "arr_cx" field — A's centroid column (in the
+# default 192-wide grid) at the moment it reaches B, so the op can locate the contact without
+# CONTACT events or stable track ids.
+def emit_probe_rel(id: cstr, s0: i64, s1: i64, q: cstr, gold: cstr, fact_t: i64, arr_cx: i64) -> void:
+    txt_byte(123)
+    txt_byte(34)
+    txt_str("id")
+    txt_byte(34)
+    txt_byte(58)
+    jq(id)
+    jkey("ask_t")
+    txt_dec(s1)
+    jkey("kind")
+    jq("relation")
+    jkey("span")
+    txt_byte(91)
+    txt_dec(s0)
+    txt_byte(44)
+    txt_dec(s1)
+    txt_byte(93)
+    jkey("op")
+    jq("move_before_arrival")
+    jkey("arr_cx")
+    txt_dec(arr_cx)
+    jkey("q")
+    jq(q)
+    jkey("gold")
+    jq(gold)
+    jkey("match")
+    jq("boolean")
+    jkey("fact_t")
+    txt_dec(fact_t)
+    txt_byte(125)
+    txt_byte(10)
+
 # one truth.jsonl event line: {"type":"event","t":..,"id":..,"desc":..,"object":..}
 def emit_event(t: i64, id: cstr, desc: cstr, obj: cstr) -> void:
     txt_byte(123)
@@ -595,6 +672,11 @@ def emit_gold(scene_id: i32, dir: cstr, dur: i64) -> void:
         emit_fact(SM_T0.i64(), (SM_T0 + SM_LEN).i64(), "background_scrolling", "yes")
     if scene_id == 7:
         emit_event(10000, "e1", "the two squares touch", "o1")
+    if scene_id == 8:
+        tb8: i64 = (LA_TC - LA_EL).i64() if VAR_EL == 1 else LA_TC.i64()
+        emit_event(tb8, "e1", "the right square starts moving", "o2")
+        emit_event(LA_TC.i64(), "e2", "the left square reaches the right square", "o1")
+        emit_fact(tb8, tb8, "launch_before_contact", "yes" if VAR_EL == 1 else "no")
     gold_write(dir, "truth.jsonl")
 
     # ---- probes.jsonl ----
@@ -628,6 +710,12 @@ def emit_gold(scene_id: i32, dir: cstr, dur: i64) -> void:
         # identity exam belongs to V3.2 candidate sets, not to this op.
         emit_probe("sc_count", "perception", "count", 0, dur, "How many squares are on the screen? Answer with a single number.", "2", "numeric", 0)
         emit_probe("sc_cont", "event", "continuous", 0, dur, "Is at least one object visible at every moment of the clip? Answer yes or no.", "yes", "boolean", 0)
+    if scene_id == 8:
+        emit_probe("rl_count", "perception", "count", 0, dur, "How many squares are on the screen? Answer with a single number.", "2", "numeric", 0)
+        # A's centroid column at arrival, in the default 192-wide grid (fixture width 192)
+        arr8: i64 = ((LA_BX - SQ + LA_OL + SQ / 2).i64() * 192) / SG_W.i64()
+        tb8p: i64 = (LA_TC - LA_EL).i64() if VAR_EL == 1 else LA_TC.i64()
+        emit_probe_rel("rl_order", 0, dur, "Does the right square start moving before the left square reaches it? Answer yes or no.", "yes" if VAR_EL == 1 else "no", tb8p, arr8)
     if scene_id == 1:
         # digit probes at the two seeded trap positions (VLM-answered: no op)
         emit_probe_dig("sk_trap1", (SK_I * 2000 + 1000).i64(), "What single digit is shown now?", SEQ_SKIP[SK_I.usize()].i32(), (SK_I * 2000).i64())
@@ -664,8 +752,11 @@ def main(argc: int, argv: u8&&) -> int:
                             if sg_streq(argv[ai + 1], "no-reverse"):
                                 VAR_NR <- 1
                             else:
-                                _ = printf("scenegen: unknown variant (have: no-vanish, no-reverse)\n".cast[u8&])
-                                return 2
+                                if sg_streq(argv[ai + 1], "early-launch"):
+                                    VAR_EL <- 1
+                                else:
+                                    _ = printf("scenegen: unknown variant (have: no-vanish, no-reverse, early-launch)\n".cast[u8&])
+                                    return 2
                     ai <- ai + 2
                 else:
                     np <- np + 1
@@ -683,9 +774,9 @@ def main(argc: int, argv: u8&&) -> int:
         _ = printf("scenegen: seed is RESERVED for final scoring (>= 1000); pass --final to run it deliberately\n".cast[u8&])
         return 3
 
-    scene_id: i32 = 0 if sg_streq(scene, "counter") else (1 if sg_streq(scene, "counter-skip") else (2 if sg_streq(scene, "motion") else (3 if sg_streq(scene, "motion-trap") else (4 if sg_streq(scene, "crossing-swap") else (5 if sg_streq(scene, "occlude-vanish") else (6 if sg_streq(scene, "scroll-motion") else (7 if sg_streq(scene, "contact-merge") else -1)))))))
+    scene_id: i32 = 0 if sg_streq(scene, "counter") else (1 if sg_streq(scene, "counter-skip") else (2 if sg_streq(scene, "motion") else (3 if sg_streq(scene, "motion-trap") else (4 if sg_streq(scene, "crossing-swap") else (5 if sg_streq(scene, "occlude-vanish") else (6 if sg_streq(scene, "scroll-motion") else (7 if sg_streq(scene, "contact-merge") else (8 if sg_streq(scene, "launch") else -1))))))))
     if scene_id < 0:
-        _ = printf("scenegen: unknown scene (have: counter, counter-skip, motion, motion-trap, crossing-swap, occlude-vanish, scroll-motion, contact-merge)\n".cast[u8&])
+        _ = printf("scenegen: unknown scene (have: counter, counter-skip, motion, motion-trap, crossing-swap, occlude-vanish, scroll-motion, contact-merge, launch)\n".cast[u8&])
         return 2
     # variant compatibility: no-vanish is motion-trap only; no-reverse is motion / motion-trap
     if VAR_NV == 1 and scene_id != 3:
@@ -694,7 +785,10 @@ def main(argc: int, argv: u8&&) -> int:
     if VAR_NR == 1 and scene_id != 2 and scene_id != 3:
         _ = printf("scenegen: --variant no-reverse applies to motion / motion-trap only\n".cast[u8&])
         return 2
-    if VAR_NV == 1 and VAR_NR == 1:
+    if VAR_EL == 1 and scene_id != 8:
+        _ = printf("scenegen: --variant early-launch applies to launch only\n".cast[u8&])
+        return 2
+    if VAR_NV + VAR_NR + VAR_EL > 1:
         _ = printf("scenegen: one variant at a time (a pair changes exactly one property)\n".cast[u8&])
         return 2
     setup_scene_params(scene_id, seed)

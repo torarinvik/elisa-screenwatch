@@ -13,6 +13,7 @@
 #   motion      / no-reverse : sm_rev            (yes -> no)
 #   motion-trap / no-vanish  : st_gap, st_cont   (yes -> no, no -> yes)
 #   motion-trap / no-reverse : st_rev            (yes -> no)
+#   launch      / early-launch: rl_order          (no -> yes; V1.3b relation_grounding)
 # Audio pairs (audiogen fixed scenes; variant golds are given inline since the authored
 # probes.jsonl carries only the base gold):
 #   transient-in-noise / no-transient : atn_count (3 -> 0), atn_cluster (2 -> 0)
@@ -33,7 +34,7 @@ if [ "$HI" -ge 1000 ]; then
 fi
 
 total=0; credited=0
-for pair in "motion:no-reverse:sm_rev" "motion-trap:no-vanish:st_gap,st_cont" "motion-trap:no-reverse:st_rev"; do
+for pair in "motion:no-reverse:sm_rev" "motion-trap:no-vanish:st_gap,st_cont" "motion-trap:no-reverse:st_rev" "launch:early-launch:rl_order"; do
     scene=${pair%%:*}; rest=${pair#*:}; variant=${rest%%:*}; flips=${rest#*:}
     p_c=0; p_n=0
     seed=$LO

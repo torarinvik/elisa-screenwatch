@@ -132,6 +132,29 @@ def answer(op, probe, frames, tracks, events):
     if op == "occluded":
         return "yes" if any(e[1] == "OCCLUDED" for e in events) else "no"
 
+    if op == "move_before_arrival":
+        # relation op (V1.3b): did the RIGHT object start moving before the LEFT object reached it?
+        # probe["arr_cx"] = the approacher's centroid column at contact (given by the generator).
+        # Uses rightmost/leftmost trajectories, not track ids — robust to id churn at proximity.
+        arr = probe.get("arr_cx")
+        if arr is None:
+            return ""
+        seq = []
+        for t, rows in sorted(tracks.items()):
+            if rows:
+                cxs = [cx for (_, cx, _, _, _) in rows]
+                seq.append((t, max(cxs), min(cxs)))
+        if not seq:
+            return ""
+        b0 = seq[0][1]
+        move_t = next((t for (t, mx, _) in seq if mx >= b0 + 3), None)
+        arrive_t = next((t for (t, _, mn) in seq if mn >= arr - 1), None)
+        if move_t is None:
+            return "no"
+        if arrive_t is None:
+            return "yes"
+        return "yes" if move_t < arrive_t - 200 else "no"
+
     return ""
 
 

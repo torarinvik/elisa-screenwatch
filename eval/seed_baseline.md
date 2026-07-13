@@ -68,3 +68,35 @@ The symbolic tracker and the cymbal are fully evidence-driven on these pairs —
 to leak. The battery's real target is the VLM member (V1.9 re-runs the Qwen motion traps under
 pair credit); this run establishes that the pairs themselves are answerable, so a VLM failure is
 a prior leaking, not an impossible probe.
+
+## Temporal-destruction baseline (V1.4) — 2026-07-13
+
+Runner: `eval/mangle_test.sh <scene> 0`. Destruction via `eval/mangle.sh` (arch_tool replay ->
+deterministic reorder -> ffmpeg ffv1 -> vidingest): modes freeze / repeat1 / reverse / shuffle.
+The scoped law: a TEMPORAL claim answered identically on original and destroyed input is SUSPECT;
+STATIC claims are expected invariant. Probes whose gold equals the known static gold of a frozen
+clip (e.g. continuous=yes) are UNTESTABLE by destruction (the control cannot flip their gold) and
+are excluded, not penalized — the metamorphic rule applied to the control itself.
+
+| scene | temporal_grounding |
+|---|---|
+| motion | 3/3 |
+| motion-trap | 6/6 |
+| crossing-swap | 1/1 |
+| occlude-vanish | 1/1 |
+| scroll-motion | 0/0 (no testable temporal probes) |
+| contact-merge | 0/0 (no testable temporal probes) |
+
+Every testable temporal answer changed under destruction — the tracker's temporal claims are
+grounded in temporal evidence, none are prior-driven. (Expected for a symbolic member; the
+instrument's real target is the VLM cross-exam in V5.)
+
+## Relation-probe baseline (V1.3b) — 2026-07-13
+
+New seeded scene `launch`: A approaches static B; B departs at contact (base) or 1.5-2.5 s
+BEFORE contact (`--variant early-launch` — effect precedes cause, the relation a continuity
+prior would smooth over). New id-churn-robust op `move_before_arrival` (rightmost/leftmost
+trajectories, no track ids; contact located from the generator-supplied `arr_cx`).
+Scored as a metamorphic pair (relation_grounding == the launch/early-launch pair line):
+**10/10 seeds credited** in meta_test; launch also joins the seed battery (now 220 probes,
+219/220, same single crossing-swap miss).
