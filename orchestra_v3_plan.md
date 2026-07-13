@@ -191,6 +191,16 @@ scored by this layer. Eight instruments, all extending existing harnesses (`scor
 - Add `omission_rate` (missed real events / real events) to `score_memory.py` output beside
   `confabulation_rate` — the two failure surfaces, reported as a pair, per NOAH's duality.
 
+### V1.3b Relation-hallucination probes (VERHallu-style)
+
+- A member can ground both events correctly and still hallucinate the *relation* between them —
+  temporal order, causality, subevent structure. New probe kind `relation`: fixtures where the
+  true order/causal structure CONTRADICTS the prior-expected one (seeded scenegen: effect-like
+  event before cause-like event; real: Go move order, boxing punch/fall order via segment cuts).
+- Scored like twins: credit requires the claimed relation to match the manipulated ground truth,
+  and to FLIP on the reversed-relation pair. Metric: `relation_grounding`. Distinct from
+  `event_order` (which measures concordance, not adversarial resistance).
+
 ### V1.4 Temporal-destruction controls (scoped — this is a metamorphic probe, NOT TCD)
 
 - `arch_tool` gains `mangle <dir> <mode>` where mode ∈ `freeze|reverse|shuffle|repeat1` —
@@ -328,6 +338,16 @@ video.
 - Candidates write into V2's supersession schema. A later contradiction (both candidates seen
   simultaneously) *disputes* the same-identity candidate — the first live supersession.
 
+### V3.2b Weak-component provisional tier (ByteTrack's insight, symbolically)
+
+- Components below `MIN_AREA` and marginal unmatched residuals are currently discarded. Keep
+  them in a **provisional tier**: never emitted as OBSERVED components, never seeding new
+  tracks, but consulted during reacquisition and candidate-set construction — low-confidence
+  detections carry real signal precisely during occlusion/merge/degradation, which is exactly
+  when our tracker currently goes blind. Cheap: they are computed before the threshold drops
+  them. A provisional match raises a reacquire candidate's confidence; it never creates a claim
+  on its own.
+
 ### V3.3 Two-dimensional global translation (generalize `SHIFT`)
 
 - Encoder currently detects vertical `SHIFT dy=`. Add horizontal: `SHIFT dx= dy=` (integer grid
@@ -337,6 +357,10 @@ video.
   fixture (the debate's earn-your-complexity constraint; record the trigger condition here:
   "an R1/R2 fixture where per-frame residual after best integer translation still touches
   > 40% of cells during a pan").
+- **Point-tracking (TAPIR-style) is a named escalation, also deferred**, with its trigger
+  written down: adopt only if the component tracker, after V3.1–V3.4, still fails crossings or
+  non-rigid motion on HELD-OUT R1 scenes. Same discipline as affine: the trigger is a measured
+  failure, never anticipation.
 
 ### V3.4 Residual segmentation (simultaneous global + local motion)
 
@@ -392,8 +416,10 @@ but "can't confabulate" ≠ "calibrated", so it takes the same exam as everyone.
 
 ### V4.1 Candidate + harness
 
-- Baseline candidate: PANNs CNN14 (AudioSet-tagging, well-understood, runs on CPU/MPS). It is a
-  *baseline*, not a selection — if a lighter/better SED clears the same gate later, swap.
+- Candidates: PANNs CNN14 (AudioSet-tagging baseline, well-understood) AND EfficientAT (distilled
+  CNN taggers, better AudioSet accuracy at lower compute). Both go through the identical per-class
+  gate; the gate picks. Neither is a *selection* — if a lighter/better SED clears the same gate
+  later, swap.
 - `screensed.py` + shim, mirroring `screenaud`: input 16 kHz mono window → top-k (class, score,
   window-time) tuples. Own venv only if its transformers/torch pins conflict (lesson learned:
   check `config.json` pins BEFORE first run).
