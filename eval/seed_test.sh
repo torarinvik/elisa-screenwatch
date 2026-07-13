@@ -5,13 +5,15 @@
 # sizes, lanes, event times, mirroring) vary per seed and the gold is computed by scenegen from the
 # same parameters, so a tracker cannot score by memorizing the seven fixed scenes.
 #
-#   eval/seed_test.sh [seed_lo] [seed_hi]        (defaults 0 9 — the first 10 dev seeds)
+#   eval/seed_test.sh [seed_lo] [seed_hi] [phase_ms]   (defaults 0 9 0; phase = V1.7 sub-batch
+#   offset applied to every fixture so no event aligns to a 2 s batch boundary by accident)
 #
 # RESERVED SEEDS: >= 1000 are the held-out final-scoring pool. scenegen refuses them without
 # --final; this runner never passes --final. Do not run reserved seeds during development.
 set -e
 LO=${1:-0}
 HI=${2:-9}
+PHASE=${3:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(dirname "$HERE")
 PY="$REPO/.venv-vlm/bin/python"; [ -x "$PY" ] || PY="${SCREENVLM_PYTHON:-python3}"
@@ -28,7 +30,7 @@ for scene in motion motion-trap crossing-swap occlude-vanish scroll-motion conta
     while [ "$seed" -le "$HI" ]; do
         d=/tmp/seed_test_run
         rm -rf "$d"
-        "$REPO/scenegen" "$scene" "$d" --seed "$seed" >/dev/null 2>&1
+        "$REPO/scenegen" "$scene" "$d" --seed "$seed" --phase "$PHASE" >/dev/null 2>&1
         "$PY" "$HERE/track_probe.py" "$d" >/dev/null 2>&1
         r=$("$PY" - "$d" <<'PYEOF'
 import json, re, sys

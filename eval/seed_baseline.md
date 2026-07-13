@@ -100,3 +100,16 @@ trajectories, no track ids; contact located from the generator-supplied `arr_cx`
 Scored as a metamorphic pair (relation_grounding == the launch/early-launch pair line):
 **10/10 seeds credited** in meta_test; launch also joins the seed battery (now 220 probes,
 219/220, same single crossing-swap miss).
+
+## Phase-offset + paraphrase + confidence audit (V1.7 / V1.8) — 2026-07-13
+
+- `scenegen --phase <ms>` (0..1900) shifts every param-derived event time by a sub-batch offset;
+  gold shifts with the frames automatically (same params feed both). `seed_test.sh 0 9 700`:
+  **219/220** — identical to phase 0, same single crossing-swap miss. No probe was riding a
+  batch-boundary accident.
+- VLM probes now carry `q_alt` paraphrases (28 across one-digit-counter, counter-skip, motion,
+  motion-trap); `vlm_probe.py --paraphrase k` rotates phrasing without touching gold. To be
+  exercised by the V1.9 Qwen re-audit.
+- V1.8 confidence-blind audit: grep-verified that NO matcher consumes a `conf` field for credit
+  (track_probe parses conf into its event tuples but no op reads it; score_memory, audio_probe,
+  vlm_probe never touch it). Confidence remains an eval OUTPUT (V3.5 calibration), never an input.

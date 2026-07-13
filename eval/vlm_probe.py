@@ -28,6 +28,9 @@ def main():
     ap.add_argument("--model", default=None, help="screenvlm --model override (e.g. the 7B audition)")
     ap.add_argument("--screenvlm", default=None)
     ap.add_argument("--out", default="answers.jsonl")
+    ap.add_argument("--paraphrase", type=int, default=0,
+                    help="V1.7: rotate each probe's phrasing — index k selects from [q] + q_alt "
+                         "(k mod count). Kills prompt-shape memorization; gold is unchanged.")
     a = ap.parse_args()
 
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,8 +45,10 @@ def main():
         for p in probes:
             span = p["span"]
             frames = a.frames if a.frames else p.get("frames", 16)
+            phr = [p["q"]] + list(p.get("q_alt", []))
+            q = phr[a.paraphrase % len(phr)]
             cmd = [svlm, a.run_dir, "--span", f"{span[0]},{span[1]}",
-                   "--frames", str(frames), "--q", p["q"], "--json"]
+                   "--frames", str(frames), "--q", q, "--json"]
             if a.model:
                 cmd += ["--model", a.model]
             if "region" in p:
@@ -62,7 +67,7 @@ def main():
                 # true error (bad args etc.) vs evidence-exhausted — surface it
                 print(f"  ! {p['id']}: screenvlm exit {r.returncode}: {r.stderr.strip()[:160]}",
                       file=sys.stderr)
-            rec = {"id": p["id"], "answer": answer, "evidence": evidence, "cost": cost, "q": p["q"]}
+            rec = {"id": p["id"], "answer": answer, "evidence": evidence, "cost": cost, "q": q}
             out.write(json.dumps(rec) + "\n")
             tag = f"[{frames}f]"
             print(f"  {p['id']:16} {tag:6} gold={p['gold']:8} -> {answer[:90]}")

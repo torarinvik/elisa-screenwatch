@@ -110,6 +110,7 @@ global mutable RNG_S: u64 = 1
 global mutable VAR_NV: i32 = 0                # no-vanish: motion-trap gap becomes a visible glide
 global mutable VAR_NR: i32 = 0                # no-reverse: hold at the reversal point instead
 global mutable VAR_EL: i32 = 0                # early-launch: launch scene, B departs BEFORE contact
+global mutable PHASE_MS: i32 = 0              # V1.7: sub-batch shift of all param-derived event times
 global mutable SK_I: i32 = 3                  # counter-skip: the two swapped positions
 global mutable SK_J: i32 = 7
 
@@ -281,6 +282,17 @@ def setup_scene_params(scene_id: i32, seed: i64) -> void:
         LA_OL <- rnd(6, 12)
         LA_TC <- rnd(8000, 11000)
         LA_EL <- rnd(1500, 2500)
+    # V1.7 phase offset: shift every param-derived event time by PHASE ms (sub-batch, 0..1900) so
+    # nothing aligns to 2 s batch boundaries by accident. Gold emission reads the same params, so
+    # truth/probes shift with the frames automatically. Ranges above keep >= 2 s of headroom.
+    if PHASE_MS > 0:
+        MO_TB <- MO_TB + PHASE_MS
+        MT_T0 <- MT_T0 + PHASE_MS
+        MT_T1 <- MT_T1 + PHASE_MS
+        MT_TR <- MT_TR + PHASE_MS
+        OV_TBV <- OV_TBV + PHASE_MS
+        SM_T0 <- SM_T0 + PHASE_MS
+        LA_TC <- LA_TC + PHASE_MS
 
 # t -> batch index (2s batches, clamped 0..9)
 def batch_of(t_ms: i64) -> i32:
@@ -744,24 +756,30 @@ def main(argc: int, argv: u8&&) -> int:
                 final <- 1
                 ai <- ai + 1
             else:
-                if sg_streq(argv[ai], "--variant"):
+                if sg_streq(argv[ai], "--phase"):
                     if ai + 1 < argc:
-                        if sg_streq(argv[ai + 1], "no-vanish"):
-                            VAR_NV <- 1
-                        else:
-                            if sg_streq(argv[ai + 1], "no-reverse"):
-                                VAR_NR <- 1
-                            else:
-                                if sg_streq(argv[ai + 1], "early-launch"):
-                                    VAR_EL <- 1
-                                else:
-                                    _ = printf("scenegen: unknown variant (have: no-vanish, no-reverse, early-launch)\n".cast[u8&])
-                                    return 2
+                        ph: i32 = atoi(argv[ai + 1]).i32()
+                        PHASE_MS <- clamp_i32(ph, 0, 1900)
                     ai <- ai + 2
                 else:
-                    np <- np + 1
-                    p[np.usize()] <- ai if np <= 5
-                    ai <- ai + 1
+                    if sg_streq(argv[ai], "--variant"):
+                        if ai + 1 < argc:
+                            if sg_streq(argv[ai + 1], "no-vanish"):
+                                VAR_NV <- 1
+                            else:
+                                if sg_streq(argv[ai + 1], "no-reverse"):
+                                    VAR_NR <- 1
+                                else:
+                                    if sg_streq(argv[ai + 1], "early-launch"):
+                                        VAR_EL <- 1
+                                    else:
+                                        _ = printf("scenegen: unknown variant (have: no-vanish, no-reverse, early-launch)\n".cast[u8&])
+                                        return 2
+                        ai <- ai + 2
+                    else:
+                        np <- np + 1
+                        p[np.usize()] <- ai if np <= 5
+                        ai <- ai + 1
 
     scene: u8& = argv[p[1.usize()]] if np >= 1 else "counter".cast[u8&]
     dir: cstr = argv[p[2.usize()]].cast[cstr] if np >= 2 else "/tmp/scenegen_out"
