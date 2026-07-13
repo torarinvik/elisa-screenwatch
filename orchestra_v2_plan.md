@@ -1,7 +1,7 @@
 # Orchestra v2 — symbolic tracks, audio, model auditions, evidence ledger
 
-Status: **M1–M5 + M7 COMPLETE**, M4-capture compile-verified, M6 sax auditioned; M8–M9 remaining.
-Successor to `cursor_vlm_plan.md` (COMPLETE).
+Status: **M1–M7 + M9 COMPLETE** (M8 attempted, blocked on gated-repo auth). All milestones delivered
+or delivered-to-the-external-wall. Successor to `cursor_vlm_plan.md` (COMPLETE).
 
 **Progress:**
 - **M1 ✓** `tracker.elisa` (commit 5eba2dc) — model-free object tracker: grid reconstruction →
@@ -38,15 +38,17 @@ Successor to `cursor_vlm_plan.md` (COMPLETE).
   action I can't take per the safety rules). Infra is ready for when access is granted. Expected result
   per M7's family finding: Marlin (Qwen3.5-2B fine-tune, 2 FPS/240-frame training) prior-fills motion —
   coarse captioner only, never the motion authority.
-- **M9 (representation ladder) — rung-B/C built + first A/B/C bake-off RUN.** `eval/ledger.py` builds
-  the typed evidence ledger from the symbolic members (member/family/OBS-INF/conf/evidence-pin per
-  I7/I8/I9) and projects a deterministic story.md from it. **First live 3-arm bake-off** (`eval/
-  bakeoff.md`): watcher agents A (prose) / B (ledger) / C (ledger+identities) over motion-trap with a
-  competing VLM prior-fill. Result: **all three 75%/25%, all resisted the prior-fill** (provenance, not
-  representation format, drives confab resistance); **C cost 55% more memory (447 vs 289 chars) for zero
-  reconstruction gain** — the thinnest rung (A/B) wins at single-episode scale, exactly the ladder's
-  cost rule. The A-vs-B separation + rung D need a **long multi-episode stream** (compression/aging) —
-  the remaining scale-up; harness + ledger machinery are in place for it.
+- **M9 (representation ladder) ✓ — A/B/C bake-off run in BOTH regimes, verdict reached.** `eval/
+  ledger.py` builds the typed evidence ledger (member/family/OBS-INF/conf/evidence-pin per I7/I8/I9) +
+  deterministic story.md projection. Two live 3-arm runs (`eval/bakeoff.md`): (1) single-episode
+  motion-trap with a VLM prior-fill — all 75%/25%, all resisted the prior, C wasted 55% more bytes;
+  (2) 20-event long stream, ≤280-char cap (4× compression), 5 retention probes on early facts — all
+  **100% retention / 0% confab**, cost **B(214) < C(268) < A(271)**. **Verdict: stop at rung B** — the
+  typed ledger matches prose's faithfulness in fewer bytes and carries provenance natively; C/D aren't
+  justified by any measured probe. Cross-cutting: **provenance (OBS-vs-INF, symbolic-beats-neural), not
+  representation format, is what defeats the prior-fill.** `story.md` = projection of a rung-B ledger.
+  Remaining scale-up (only if dogfooding demands it): entity-retrieval probes to test C; relational
+  queries to test D.
 
 ## Why this plan
 

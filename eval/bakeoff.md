@@ -44,11 +44,37 @@ REJECTED (low-trust, loses to sym)").
    answering 1 needs object-permanence world-knowledge the symbolic layer does not (and should not,
    per I9) assert. No rung fabricated — they faithfully reported what the evidence licensed.
 
-## Honest scope + next run
+## Protocol (run 2 — long stream, compression + aging bites)
 
-This is one episode with four events; it cannot separate A from B, because compression and aging do not
-yet bite. The ladder's predicted payoff — B/C preserving aged facts and provenance under a tight cap
-where prose (A) blurs — needs a **long multi-episode stream** (many events, memory cap << total
-content, probes on early facts asked much later). That larger run, plus rung D (graph) only if C first
-fails a retrieval probe C's identities should have caught, is the remaining M9 work. Rung-B/C machinery
-(`eval/ledger.py`) and this harness are in place for it.
+20 events over a ~30 s session (OCR text, viola objects, cymbal audio, bass activity) mixing three
+members, plus the same "calm / no alarms / no errors" VLM prior-fill (which contradicts an early error
+dialog + alarm tone). Each watcher reads the stream ONCE, compresses to a **≤ 280-char memory** (≈ 4×
+compression of the raw ~1000-char stream), the stream is then gone, and it answers **5 retention probes
+about EARLY facts** (error number 47 @ t=1000; alarm 880 Hz @ t=4000; o1's first corner @ t=2500; "12
+files" @ t=8500; and the calm-vs-not confab probe) from memory only.
+
+| rung | perception | retention | confab | memory (chars) |
+|---|---:|---:|---:|---:|
+| A prose | 100% (5/5) | 100% | 0% | 271 |
+| B ledger | 100% (5/5) | 100% | 0% | **214** |
+| C ledger + ids | 100% (5/5) | 100% | 0% | 268 |
+
+All three retained every early fact through 4× compression and all rejected the "calm / no alarms"
+prior (rp_confab = no). The separator is **maintenance cost: B (214) < C (268) < A (271)** — the typed
+ledger reconstructs identically to prose in **21% fewer bytes**, and C's identity index adds 54 bytes
+over B with no probe rewarding it.
+
+## Verdict — stop at rung B
+
+Across both regimes: reconstruction/retention/confab are a **three-way tie**; the only axis that moves
+is cost, and the **typed event ledger (B) dominates** — it matches prose's faithfulness in fewer bytes
+and carries the OBSERVED/INFERRED provenance natively. **C (identities) and D (graph) are not justified
+by any measured probe** (C only spends bytes; D isn't reached, per the ladder's rule "build D only if C
+fails a retrieval probe its identities should have caught" — no such failure occurred). So `story.md`
+should be a **projection of a rung-B ledger** (which `eval/ledger.py` already produces). C earns its
+cost only when entity-level retrieval at larger scale is probed; D only if relational queries defeat C.
+
+Cross-cutting finding (both runs): **provenance discipline — OBSERVED-vs-INFERRED, symbolic-beats-
+neural (I8/I9) — is what defeats the prior-fill, independent of representation format.** Every rung
+resisted the VLM in every run because every rung carried the trust tagging. The representation choice is
+a *cost* decision (B wins); the *faithfulness* comes from provenance, which is the project thesis.
