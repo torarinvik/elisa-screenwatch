@@ -32,9 +32,13 @@ Successor to `cursor_vlm_plan.md` (COMPLETE).
   traps, so Marlin can only be a coarse captioner, is CUDA-oriented + torchcodec-video-input (mismatch
   with the ring), and would eat a Mac-port session for low marginal value. Revisit only if a coarse
   long-span captioning verb proves needed in dogfooding.
-- **M9 (representation ladder) — REMAINING.** The A→D ladder (story.md → typed ledger → +identities →
-  graph) needs real multi-agent watcher runs scored by the referee; the largest remaining piece, best
-  done as its own arc. Proto-B already exists (log.md + arch pointers).
+- **M9 (representation ladder) — rung-B foundation BUILT.** `eval/ledger.py` builds the typed evidence
+  ledger from the symbolic members (viola + cymbal): each record carries member/family/OBSERVED-vs-
+  INFERRED/conf/evidence-pin (I7/I8/I9), and `project` derives a deterministic story.md FROM the ledger
+  (never independently edited). Demonstrated cross-member on motion-trap (appear/vanish/displaced-
+  reappear=new obj/midfield-reverse) and av-sync audio (silence→impact→silence). The A↔D *comparative*
+  scoring (which rung wins on reconstruction/retrieval/confab/maintenance-cost) still needs live
+  multi-agent watcher runs — the remaining arc; this is the factual ledger those runs build on.
 
 ## Why this plan
 
