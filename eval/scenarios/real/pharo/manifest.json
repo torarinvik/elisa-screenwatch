@@ -1,0 +1,12 @@
+{
+  "name": "pharo",
+  "tier": "R1",
+  "video": "pharo programming.mp4",
+  "sha256": "b4e8295c3ed7ef63cdf9dd486af44e71775cbc297f4a747be5d6bd69602f6c5b",
+  "t0": 0,
+  "dur": 60,
+  "fps": 10,
+  "width": 192,
+  "audio": true,
+  "note": "Near-domain R1 fixture: a desktop Pharo IDE session (windows, text, scrolling, cursor). Primarily a triage + OCR exam, NOT object tracking (orchestra_v3_plan.md V3.6 step 2). Gold truth.jsonl/probes.jsonl are authored at annotation time per plan section 7 (sparse, contact-sheet-verifiable), not committed with this manifest."
+}

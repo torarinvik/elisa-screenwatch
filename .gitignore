@@ -3,6 +3,7 @@ screenocr
 arch_tool
 screenasr
 scenegen
+vidingest
 *.idx
 *.bin
 *.ppm

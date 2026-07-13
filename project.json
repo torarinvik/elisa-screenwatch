@@ -25,6 +25,14 @@
       "opt": "3",
       "link-flags": ["-lcompression"]
     },
+    "vidingest": {
+      "entry": "vidingest.elisa",
+      "emit": "obj",
+      "run-emit": "obj",
+      "output": "vidingest",
+      "opt": "3",
+      "link-flags": ["-lcompression"]
+    },
     "tracker": {
       "entry": "tracker.elisa",
       "emit": "obj",
