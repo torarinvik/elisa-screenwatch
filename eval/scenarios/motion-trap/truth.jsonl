@@ -1,0 +1,13 @@
+{"type":"phase","t0":0,"t1":8000,"label":"bright square moves left to right","activity":"video"}
+{"type":"phase","t0":8000,"t1":10000,"label":"square vanished from view","activity":"still"}
+{"type":"phase","t0":10000,"t1":14000,"label":"square reappears displaced and moves right","activity":"video"}
+{"type":"phase","t0":14000,"t1":20000,"label":"square reverses in mid-field and moves left","activity":"video"}
+{"type":"fact","t0":8000,"t1":10000,"key":"visible","value":"no"}
+{"type":"fact","t0":0,"t1":20000,"key":"disappeared","value":"yes"}
+{"type":"fact","t0":14000,"t1":14000,"key":"reversal_location","value":"middle"}
+{"type":"fact","t0":0,"t1":20000,"key":"continuous","value":"no"}
+{"type":"fact","t0":0,"t1":20000,"key":"object_count","value":"1"}
+{"type":"event","t":0,"id":"e0","desc":"a bright square appears at the left and moves right","object":"o1"}
+{"type":"event","t":8000,"id":"e1","desc":"the square vanishes from view","object":"o1"}
+{"type":"event","t":10000,"id":"e2","desc":"the square reappears displaced and moves right","object":"o1"}
+{"type":"event","t":14000,"id":"e3","desc":"the square reverses direction in mid-field, not at an edge","object":"o1"}

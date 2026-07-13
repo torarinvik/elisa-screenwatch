@@ -11,7 +11,7 @@
 # eval/scenarios/<name>/{truth,probes}.jsonl.
 #
 # USAGE: scenegen <scene> [out_dir] [width] [fps] [dur_ms]
-#   scene    one of: counter        (more scenes added alongside their authored truth)
+#   scene    one of: counter, counter-skip, motion, motion-trap  (each with authored truth)
 #   out_dir  fixture directory                       (default /tmp/scenegen_out)
 #   width    downscaled grid width                   (default 192)
 #   fps      frames per second                       (default 10)
@@ -104,11 +104,60 @@ def scene_counter(t_ms: i64) -> void:
 def scene_counter_skip(t_ms: i64) -> void:
     draw_center_digit(SEQ_SKIP[batch_of(t_ms).usize()].i32())
 
+# ---- motion scenes (the perceiving-vs-priors test for the VLM member, cursor_vlm_plan.md §4) ----
+
+# A single bright square on the dark field, moving horizontally at mid-height. side px at source res.
+global mutable SQ: i32 = 60
+
+def draw_square(x: i32, color: u32) -> void:
+    fill_rect(x, SG_H / 2 - SQ / 2, SQ, SQ, color)
+
+# motion: honest continuous motion. x: 40 -> 540 over 0..10s (moving RIGHT), bounces at the right
+# edge at t=10s, then 540 -> 40 over 10..20s (moving LEFT). One object, one edge-bounce, no surprises.
+def scene_motion(t_ms: i64) -> void:
+    fill_bg(2105376)                                  # 0x00202020 dark
+    x: mutable i64 = 40
+    if t_ms <= 10000:
+        x <- 40 + (500 * t_ms) / 10000                # 40 -> 540, moving right
+    else:
+        tt: i64 = t_ms - 10000
+        tt2: i64 = tt if tt < 10000 else 10000
+        x <- 540 - (500 * tt2) / 10000                # 540 -> 40, moving left
+    draw_square(x.i32(), 15790320)                    # 0x00F0F0F0 near-white
+
+# motion-trap: priors-vs-pixels. Same square, but (a) it VANISHES for 2s mid-flight (t=8..10s) and
+# reappears DISPLACED (teleported back to x=300, behind where it vanished at ~430); (b) at t=14s it
+# reverses direction in MID-FIELD (x~420, nowhere near an edge). A continuity-prior model reports
+# smooth motion and an edge-bounce; a perceiving one reports the vanish and the causeless reversal.
+def scene_motion_trap(t_ms: i64) -> void:
+    fill_bg(2105376)
+    visible: mutable bool = true
+    x: mutable i64 = 40
+    if t_ms < 8000:
+        x <- 40 + (390 * t_ms) / 8000                 # 40 -> 430, moving right
+    else:
+        if t_ms < 10000:
+            visible <- false                          # VANISHED (dark field only)
+        else:
+            if t_ms < 14000:
+                x <- 300 + (120 * (t_ms - 10000)) / 4000   # reappears at 300 (displaced), 300 -> 420
+            else:
+                tt: i64 = t_ms - 14000
+                tt2: i64 = tt if tt < 6000 else 6000
+                x <- 420 - (380 * tt2) / 6000         # 420 -> 40, mid-field reversal (edge is 580)
+    draw_square(x.i32(), 15790320) if visible
+
 def render_scene(scene_id: i32, t_ms: i64) -> void:
     if scene_id == 1:
         scene_counter_skip(t_ms)
     else:
-        scene_counter(t_ms)
+        if scene_id == 2:
+            scene_motion(t_ms)
+        else:
+            if scene_id == 3:
+                scene_motion_trap(t_ms)
+            else:
+                scene_counter(t_ms)
 
 # ---- driver ------------------------------------------------------------------------------------
 
@@ -120,9 +169,9 @@ def main(argc: int, argv: u8&&) -> int:
     fps: i32 = clamp_i32(arg_i32(argc, argv, 4, 10), 1, 60)
     dur_ms: i64 = at_least(arg_i32(argc, argv, 5, 20000), 1000).i64()
 
-    scene_id: i32 = 0 if sg_streq(scene, "counter") else (1 if sg_streq(scene, "counter-skip") else -1)
+    scene_id: i32 = 0 if sg_streq(scene, "counter") else (1 if sg_streq(scene, "counter-skip") else (2 if sg_streq(scene, "motion") else (3 if sg_streq(scene, "motion-trap") else -1)))
     if scene_id < 0:
-        _ = printf("scenegen: unknown scene (have: counter, counter-skip)\n".cast[u8&])
+        _ = printf("scenegen: unknown scene (have: counter, counter-skip, motion, motion-trap)\n".cast[u8&])
         return 2
 
     _ = mkdir(dir.cast[u8&], 493)

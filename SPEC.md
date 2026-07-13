@@ -177,13 +177,25 @@ Three-rate perception, one instrument: always-on symbolic stream for monitoring 
 text/change verification → VLM for event semantics. The always-on channel stays symbolic; `describe`
 is the boss's budgeted deep-attention verb (the singer never calls it — see watcher_protocol).
 
-### describe trust policy (I8) — PENDING the Phase-3 trap-test
+### describe trust policy (I8) — MEASURED (Phase-3 trap-test)
 
-Until the `motion`/`motion-trap` trap-test (cursor_vlm_plan.md §4) measures screenvlm's confab
-profile, `describe` answers are **Inferred-only**: they may populate `state.md` HYPOTHESES /
-OPEN_QUESTIONS and answer a boss query, but **may not create `story.md` EVENTS**, and a contradicting
-symbolic result always wins. The measured trap numbers replace this paragraph with the graduated
-policy (propose-events-if-corroborated / hypothesis-generator-only / benched).
+The `motion`/`motion-trap` trap-test (eval/scenarios.md "VLM trap-test") measured screenvlm's confab
+profile: on abstract motion it reports the physically *expected* motion over the actual pixels — the
+3B fails the honest scene (perception 50%, direction called backwards) and both the 3B and the 7B
+fail the traps (25% / 75% confab; miss a 2s vanish, call a mid-field reversal an edge-bounce). Scale
+and frame density do not fix it. On text/scene content the same model is strong (read title-card text
+verbatim on a real capture). So `describe` is **Inferred-only and split by claim type**:
+
+- **Text / scene / semantic claims** (what app, title, on-screen text, general content) — usable as
+  Inferred hypotheses and to answer a boss query; still **never override** an `ocr`/`compare`
+  measurement, and pin the arch seq span.
+- **Spatial-motion event claims** (direction, appearance/disappearance, reversal location, motion
+  continuity, moving-object count) — **untrusted**. They may only raise a `state.md` OPEN_QUESTION
+  that a symbolic verb (`compare` / churn signal) must resolve; they may **never** become a
+  `story.md` EVENT on the VLM's word alone.
+
+In all cases a describe answer carries its exact seq span and is tagged `Inferred(vlm)`. The 7B is
+offline-audition only (it did not clear the traps and is too heavy to run beside the recorder).
 
 ## Query protocol (active perception)
 

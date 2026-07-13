@@ -73,7 +73,7 @@ Each scenario targets one failure mode. `src` = how it's produced (`real` now, `
 |---|----------|-----|---------|-----------|
 | 1 | small-text | real | grid+OCR legibility of fine text | perception: read a small label verbatim |
 | 2 | scrolling-code | real | SHIFT tracking; identity through scroll | event: "did line X pass?"; perception: current top line |
-| 3 | game-motion | synth | tracking under `video`-class churn | perception: where is the moving sprite? |
+| 3 | motion / motion-trap | synth ✓ | VLM (violin) motion perception vs priors | perception: direction/position/count; traps: vanish, mid-field reversal, continuity |
 | 4 | brief-object | synth | transient visible only K frames | event: "did a red box appear?"; occlusion after |
 | 5 | one-digit-counter | synth ✓ | small localized perception + change | perception at several t; retention of an early value |
 | 5t | counter-skip (trap) | synth ✓ | perceiving vs GUESSING | perception at batches 3,7 where the pattern breaks (7 and 3, swapped) |
@@ -108,3 +108,35 @@ can't tell" over one that guesses, and the metric rewards exactly that.
   state.md's belief-history, not log.md, or accept the small over-count).
 - Baselines (one watcher each): counter 100/100/100/0 ; counter-skip 100/100/100/5.3 ;
   reconstruction 100 on both. Reference points, not claims about all scenarios.
+
+## VLM trap-test (M3) — the violin's confab profile
+
+The `describe` verb (screenvlm / Qwen2.5-VL) was trap-tested the way counter-skip trap-tested the
+watcher: the VLM alone, one invocation per probe (`eval/trap_test.sh <scene>`), greedy decode, no
+watcher in the loop. `motion` is honest continuous motion; `motion-trap` breaks the physics prior —
+the square VANISHES for 2s mid-flight (t=8–10s) and REVERSES in mid-field (t=14s, nowhere near an
+edge). Perception ↑ better, confabulation ↓ better:
+
+| scene | model | frames | perception | confab | what it said |
+|---|---|---|---|---|---|
+| motion (honest) | 3B | 16 | **50%** | 50% | count ✓, late-position ✓; **direction backwards** ("left"→right), missed the reversal |
+| motion-trap | 3B | 16 | **25%** | 75% | count ✓; **missed the vanish** ("no"), reversal "**at the edge**" (prior), motion "**continuous**" |
+| motion-trap | 7B | 16 | **25%** | 75% | missed vanish, reversal "edge"; caught "not continuous" ✓ but count = **2** (spurious) |
+
+- **Priors beat pixels, and scale does not fix it.** Both the 3B and the 7B report the physically
+  *expected* motion — smooth, edge-bounce — over what the pixels show (a vanish, a mid-field
+  reversal). On the honest scene the 3B even calls the direction backwards and invents a diagonal +
+  a stop ("moves diagonally to the top-left corner… then stops"; the square moves straight right).
+- **It is not a sampling miss.** Density sweep on the vanish probe (span 6–12s, vanish = 8–10s):
+  frames = 8 / 16 / 32 all answer "No." At 32 frames ~11 sampled frames are a fully blank field, and
+  the model still fills in the square. More frames can't fix a prior-fill.
+- **But strong at text/scene.** On a real capture the same 3B read title-card text verbatim
+  ("LOVE CAMP 7", "Video Nasties Ranked", the disclaimer, "#66", "COPYRIGHT MMXVIII"). The violin's
+  competence is semantic/textual content, not abstract spatial-motion tracking.
+- **Gate outcome (SPEC §I8 describe trust policy).** Straightforward weak (50%) AND traps failing
+  (25%) for *both* model sizes ⇒ `describe` is Inferred-only and **split by claim type**: text/scene
+  claims are usable Inferred hypotheses (still never overriding OCR/compare); spatial-motion claims
+  (direction, appearance/disappearance, reversal location, continuity, moving-object count) are
+  **untrusted** — they may only raise an OPEN_QUESTION a symbolic verb (`compare`/churn) must
+  resolve, and may never become a `story.md` EVENT. Reproduce: `eval/trap_test.sh motion` /
+  `motion-trap` (add `MODEL=Qwen/Qwen2.5-VL-7B-Instruct` for the 7B audition).

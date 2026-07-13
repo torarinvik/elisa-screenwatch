@@ -15,8 +15,9 @@ sequentially and maintain a compact, evolving understanding of it").
 by the local video-VLM member `screenvlm` (the *violin*). It answers *what is happening* for
 non-textual motion content the symbolic stream can only report as statistics. Two rules bound it: the
 **singer never calls it** (deep attention is the boss's budget), and every `describe` answer is
-**Inferred-only** and evidence-pinned (I8) — it may not become a `story.md` EVENT until the Phase-3
-trap-test fills in the describe trust policy in SPEC.
+**Inferred-only** and evidence-pinned (I8). The Phase-3 trap-test measured its confab profile (SPEC
+"describe trust policy"): text/scene claims are usable Inferred hypotheses, spatial-motion claims are
+untrusted and need symbolic corroboration.
 
 ## The memory hierarchy (3 tiers)
 
@@ -198,9 +199,11 @@ why: <one line tying it to the goal>
    violin) for *what happens* in a motion span — set `span: t0,t1` (+ optional `region`).
 3. On answers: append a boss-attributed EVENT to log.md; if durable, reflect it in story.md via the
    consolidator; update goal.md sub-goals if warranted; clear the escalation. A `describe` answer is
-   INFERRED (I8): until the trust policy says otherwise it may seed a HYPOTHESIS or answer the
-   question, but **must not become a story.md EVENT**, and a contradicting `ocr`/`compare` result
-   overrides it. Prefer corroborating a describe claim with a symbolic verb before acting on it.
+   INFERRED (I8, MEASURED trust policy in SPEC): a **text/scene** claim may seed a HYPOTHESIS or
+   answer the question (never overriding `ocr`/`compare`); a **spatial-motion** claim (direction,
+   (dis)appearance, reversal location, continuity, moving-object count) is **untrusted** — raise it as
+   an OPEN_QUESTION and resolve it with `compare`/churn before any EVENT. A describe claim never
+   becomes a story.md EVENT on the VLM's word alone.
 4. Hard stops: ≤ 3 queries per escalation; `evidence-exhausted`/`pruned` answers go to an
    OPEN_QUESTION in state.md and are never re-asked for the same event.
 

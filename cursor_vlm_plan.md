@@ -7,8 +7,13 @@ Progress: **M1 done** — `screenvlm` + `setup_vlm.sh` + repo-local `.venv-vlm`;
 34s capture (read exact title-card text; load ≈ 10 s, infer ≈ 8–12 s, peak RSS ≈ 10.7 GB, MPS);
 partial-span / evidence-exhausted paths exercised. **M2 done** — SPEC gains I8, the violin member,
 the screenvlm contract, "The cursor" section, `describe` query type + evidence grammar; watcher_
-protocol → v3.1. Trust policy left explicitly PENDING the M3 trap-test. Next: **M3** (motion +
-motion-trap scenes → measured confab profile → fill in the trust policy).
+protocol → v3.1. **M3 done** — `motion`/`motion-trap` scenegen scenes (bit-exact), the
+`eval/trap_test.sh` + `eval/vlm_probe.py` harness, and the measured confab profile: on abstract
+motion both the 3B and 7B fail (honest 50%, traps 25%/75% confab — miss the vanish, call a mid-field
+reversal an edge-bounce; density-invariant, so prior-fill not sampling), while the 3B is strong at
+text/scene. Trust policy FILLED IN (SPEC §I8): `describe` Inferred-only, split by claim type —
+text/scene usable, spatial-motion untrusted (needs symbolic corroboration, never an EVENT alone).
+Next: **M4** (live end-to-end describe query on real content) then **M5** (bake-off registration).
 
 ## 0. Motivation and thesis fit
 
