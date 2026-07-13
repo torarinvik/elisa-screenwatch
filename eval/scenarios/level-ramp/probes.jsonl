@@ -1,2 +1,2 @@
-{"id": "alr_shift", "kind": "event", "op": "has_level_shift", "q": "Does the overall sound level change significantly? Answer yes or no.", "gold": "yes", "match": "boolean", "fact_t": 8000}
-{"id": "alr_count", "kind": "event", "op": "level_shift_count", "q": "How many distinct level changes occur (not machine-gunned)? Answer a number.", "gold": "1", "match": "numeric", "fact_t": 8000}
+{"id": "alr_shift", "kind": "event", "op": "has_level_shift", "q": "Does the overall sound level change significantly? Answer yes or no.", "gold": "yes", "match": "boolean", "fact_t": 8000, "claim_class": "presence"}
+{"id": "alr_count", "kind": "event", "op": "level_shift_count", "q": "How many distinct level changes occur (not machine-gunned)? Answer a number.", "gold": "1", "match": "numeric", "fact_t": 8000, "claim_class": "count"}

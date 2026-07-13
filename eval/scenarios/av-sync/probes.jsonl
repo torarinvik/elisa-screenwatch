@@ -1,2 +1,3 @@
-{"id": "avs_impact", "kind": "event", "op": "transient_near", "at": 10000, "tol": 50, "q": "Is there an impact near 10 seconds (within 50ms)? Answer yes or no.", "gold": "yes", "match": "boolean", "fact_t": 10000}
-{"id": "avs_count", "kind": "event", "op": "transient_count", "q": "How many impacts occur in total? Answer a number.", "gold": "1", "match": "numeric", "fact_t": 10000}
+{"id": "avs_impact", "kind": "event", "op": "transient_near", "at": 10000, "tol": 50, "q": "Is there an impact near 10 seconds (within 50ms)? Answer yes or no.", "gold": "yes", "match": "boolean", "fact_t": 10000, "claim_class": "timing"}
+{"id": "avs_count", "kind": "event", "op": "transient_count", "q": "How many impacts occur in total? Answer a number.", "gold": "1", "match": "numeric", "fact_t": 10000, "claim_class": "count"}
+{"id": "avs_impact_n", "kind": "event", "op": "transient_near", "at": 3000, "tol": 50, "q": "Is there an impact near 3 seconds (within 50ms)? Answer yes or no.", "gold": "no", "match": "boolean", "fact_t": 3000, "claim_class": "timing", "twin_of": "avs_impact", "polarity": "neg"}

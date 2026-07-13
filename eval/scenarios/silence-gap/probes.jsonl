@@ -1,2 +1,3 @@
-{"id": "asg_silence", "kind": "event", "op": "has_silence", "q": "Is there a silent gap in the audio? Answer yes or no.", "gold": "yes", "match": "boolean", "fact_t": 7000}
-{"id": "asg_at7", "kind": "event", "op": "silence_near", "at": 7000, "tol": 300, "q": "Does the silence begin near 7 seconds? Answer yes or no.", "gold": "yes", "match": "boolean", "fact_t": 7000}
+{"id": "asg_silence", "kind": "event", "op": "has_silence", "q": "Is there a silent gap in the audio? Answer yes or no.", "gold": "yes", "match": "boolean", "fact_t": 7000, "claim_class": "presence"}
+{"id": "asg_at7", "kind": "event", "op": "silence_near", "at": 7000, "tol": 300, "q": "Does the silence begin near 7 seconds? Answer yes or no.", "gold": "yes", "match": "boolean", "fact_t": 7000, "claim_class": "timing"}
+{"id": "asg_at2_n", "kind": "event", "op": "silence_near", "at": 2000, "tol": 300, "q": "Does the silence begin near 2 seconds? Answer yes or no.", "gold": "no", "match": "boolean", "fact_t": 2000, "claim_class": "timing", "twin_of": "asg_at7", "polarity": "neg"}

@@ -1,2 +1,2 @@
-{"id": "ata_count", "kind": "event", "op": "tone_count", "q": "How many tone/beep sounds occur? Answer a number.", "gold": "3", "match": "numeric", "fact_t": 2000}
-{"id": "ata_freq", "kind": "perception", "op": "tone_freq", "q": "What is the beep frequency in Hz? Answer a number.", "gold": "1000", "match": "numeric", "fact_t": 2000}
+{"id": "ata_count", "kind": "event", "op": "tone_count", "q": "How many tone/beep sounds occur? Answer a number.", "gold": "3", "match": "numeric", "fact_t": 2000, "claim_class": "count"}
+{"id": "ata_freq", "kind": "perception", "op": "tone_freq", "q": "What is the beep frequency in Hz? Answer a number.", "gold": "1000", "match": "numeric", "fact_t": 2000, "claim_class": "audio"}
