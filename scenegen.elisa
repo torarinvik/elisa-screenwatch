@@ -103,6 +103,12 @@ global mutable SEQ_SKIP: array[u8, 10] = [0, 1, 2, 7, 4, 5, 6, 3, 8, 9]
 global RESERVED_SEED: i64 = 1000
 global mutable SG_SEED: i64 = -1              # -1 = unseeded (historical fixed scenes)
 global mutable RNG_S: u64 = 1
+
+# V1.2 metamorphic variants: same seed, frames bit-identical up to the divergence moment, exactly
+# ONE property changed. Pair scoring (eval/meta_test.sh) credits a probe only when the answer is
+# correct on BOTH sides of the pair — a prior-driven answer that ignores the pixels scores 0.
+global mutable VAR_NV: i32 = 0                # no-vanish: motion-trap gap becomes a visible glide
+global mutable VAR_NR: i32 = 0                # no-reverse: hold at the reversal point instead
 global mutable SK_I: i32 = 3                  # counter-skip: the two swapped positions
 global mutable SK_J: i32 = 7
 
@@ -294,10 +300,13 @@ def scene_motion(t_ms: i64) -> void:
     if t_ms <= MO_TB.i64():
         x <- MO_X0.i64() + ((MO_X1 - MO_X0).i64() * t_ms) / MO_TB.i64()
     else:
-        rem: i64 = 20000 - MO_TB.i64()
-        tt: i64 = t_ms - MO_TB.i64()
-        tt2: i64 = tt if tt < rem else rem
-        x <- MO_X1.i64() - ((MO_X1 - MO_X0).i64() * tt2) / rem
+        if VAR_NR == 1:
+            x <- MO_X1.i64()                          # no-reverse: hold at the bounce point
+        else:
+            rem: i64 = 20000 - MO_TB.i64()
+            tt: i64 = t_ms - MO_TB.i64()
+            tt2: i64 = tt if tt < rem else rem
+            x <- MO_X1.i64() - ((MO_X1 - MO_X0).i64() * tt2) / rem
     xm: i64 = (SG_W - SQ).i64() - x if MO_MIR == 1 else x
     fill_rect(xm.i32(), MO_Y, SQ, SQ, 15790320)       # 0x00F0F0F0 near-white
 
@@ -315,15 +324,23 @@ def scene_motion_trap(t_ms: i64) -> void:
         x <- MT_X0.i64() + ((MT_XV - MT_X0).i64() * t_ms) / MT_T0.i64()
     else:
         if t_ms < MT_T1.i64():
-            visible <- false                          # VANISHED (dark field only)
+            if VAR_NV == 1:
+                # no-vanish: visible glide between the SAME endpoints (XV -> XR0), so every frame
+                # outside [T0,T1] is bit-identical to the base scene
+                x <- MT_XV.i64() + ((MT_XR0 - MT_XV).i64() * (t_ms - MT_T0.i64())) / (MT_T1 - MT_T0).i64()
+            else:
+                visible <- false                      # VANISHED (dark field only)
         else:
             if t_ms < MT_TR.i64():
                 x <- MT_XR0.i64() + ((MT_XR1 - MT_XR0).i64() * (t_ms - MT_T1.i64())) / (MT_TR - MT_T1).i64()
             else:
-                rem: i64 = 20000 - MT_TR.i64()
-                tt: i64 = t_ms - MT_TR.i64()
-                tt2: i64 = tt if tt < rem else rem
-                x <- MT_XR1.i64() - ((MT_XR1 - MT_XE).i64() * tt2) / rem
+                if VAR_NR == 1:
+                    x <- MT_XR1.i64()                 # no-reverse: hold at the reversal point
+                else:
+                    rem: i64 = 20000 - MT_TR.i64()
+                    tt: i64 = t_ms - MT_TR.i64()
+                    tt2: i64 = tt if tt < rem else rem
+                    x <- MT_XR1.i64() - ((MT_XR1 - MT_XE).i64() * tt2) / rem
     xm: i64 = (SG_W - SQ).i64() - x if MT_MIR == 1 else x
     fill_rect(xm.i32(), MT_Y, SQ, SQ, 15790320) if visible
 
@@ -559,14 +576,16 @@ def emit_gold(scene_id: i32, dir: cstr, dur: i64) -> void:
     # ---- truth.jsonl ----
     txt_len <- 0
     if scene_id == 2:
-        emit_event(MO_TB.i64(), "e1", "the square reverses direction at the screen edge", "o1")
+        emit_event(MO_TB.i64(), "e1", "the square reverses direction at the screen edge", "o1") if VAR_NR == 0
         emit_fact(0, MO_TB.i64(), "direction", d_fwd)
     if scene_id == 3:
-        emit_event(MT_T0.i64(), "e1", "the square vanishes from view", "o1")
-        emit_event(MT_T1.i64(), "e2", "the square reappears displaced backward", "o1")
-        emit_event(MT_TR.i64(), "e3", "the square reverses direction in mid-field", "o1")
-        emit_fact(MT_T0.i64(), MT_T1.i64(), "visible", "no")
-        emit_fact(MT_TR.i64(), MT_TR.i64(), "reversal_location", "middle")
+        if VAR_NV == 0:
+            emit_event(MT_T0.i64(), "e1", "the square vanishes from view", "o1")
+            emit_event(MT_T1.i64(), "e2", "the square reappears displaced backward", "o1")
+            emit_fact(MT_T0.i64(), MT_T1.i64(), "visible", "no")
+        if VAR_NR == 0:
+            emit_event(MT_TR.i64(), "e3", "the square reverses direction in mid-field", "o1")
+            emit_fact(MT_TR.i64(), MT_TR.i64(), "reversal_location", "middle")
     if scene_id == 4:
         emit_event(10000, "e1", "the two squares cross in the middle", "o1")
     if scene_id == 5:
@@ -583,16 +602,17 @@ def emit_gold(scene_id: i32, dir: cstr, dur: i64) -> void:
     if scene_id == 2:
         emit_probe("sm_count", "perception", "count", 0, dur, "How many moving objects are on the screen? Answer with a single number.", "1", "numeric", 0)
         emit_probe("sm_dir", "perception", "direction", 800, (MO_TB - 800).i64(), "Is the bright square moving to the left or to the right? Answer left or right.", d_fwd, "substring", 1000)
-        emit_probe("sm_rev", "event", "reversal", 0, dur, "Does the square reverse its direction of motion at any point? Answer yes or no.", "yes", "boolean", MO_TB.i64())
-        emit_probe("sm_zone", "event", "reversal_zone", 0, dur, "Does the square change direction near the left edge, the middle, or the right edge? Answer left, middle, or right.", zone, "substring", MO_TB.i64())
+        emit_probe("sm_rev", "event", "reversal", 0, dur, "Does the square reverse its direction of motion at any point? Answer yes or no.", "no" if VAR_NR == 1 else "yes", "boolean", MO_TB.i64())
+        emit_probe("sm_zone", "event", "reversal_zone", 0, dur, "Does the square change direction near the left edge, the middle, or the right edge? Answer left, middle, or right.", zone, "substring", MO_TB.i64()) if VAR_NR == 0
         emit_probe("sm_cont", "event", "continuous", 0, dur, "Is the square continuously visible for the whole clip? Answer yes or no.", "yes", "boolean", 0)
     if scene_id == 3:
         emit_probe("st_count", "perception", "count", 0, dur, "How many moving objects are on the screen? Answer with a single number.", "1", "numeric", 0)
         emit_probe("st_dir1", "perception", "direction", 500, (MT_T0 - 500).i64(), "Before it disappears, is the square moving left or right? Answer left or right.", d_fwd, "substring", 1000)
-        emit_probe("st_gap", "event", "vanish_gap", (MT_T0 + 200).i64(), (MT_T1 - 100).i64(), "Does the square vanish completely at some point? Answer yes or no.", "yes", "boolean", MT_T0.i64())
-        emit_probe("st_cont", "event", "continuous", 0, dur, "Is the square continuously visible for the whole clip? Answer yes or no.", "no", "boolean", MT_T0.i64())
+        emit_probe("st_gap", "event", "vanish_gap", (MT_T0 + 200).i64(), (MT_T1 - 100).i64(), "Does the square vanish completely at some point? Answer yes or no.", "no" if VAR_NV == 1 else "yes", "boolean", MT_T0.i64())
+        emit_probe("st_cont", "event", "continuous", 0, dur, "Is the square continuously visible for the whole clip? Answer yes or no.", "yes" if VAR_NV == 1 else "no", "boolean", MT_T0.i64())
         emit_probe("st_dir2", "perception", "direction", (MT_T1 + 400).i64(), (MT_TR - 400).i64(), "After it reappears, is the square moving left or right? Answer left or right.", d_fwd, "substring", MT_T1.i64())
-        emit_probe("st_zone", "event", "reversal_zone", 0, dur, "When the square changes direction, is it near the left edge, the middle, or the right edge? Answer left, middle, or right.", "middle", "substring", MT_TR.i64())
+        emit_probe("st_rev", "event", "reversal", 0, dur, "Does the square reverse its direction of motion at any point? Answer yes or no.", "no" if VAR_NR == 1 and VAR_NV == 0 else "yes", "boolean", MT_TR.i64())
+        emit_probe("st_zone", "event", "reversal_zone", 0, dur, "When the square changes direction, is it near the left edge, the middle, or the right edge? Answer left, middle, or right.", "middle", "substring", MT_TR.i64()) if VAR_NR == 0
     if scene_id == 4:
         emit_probe("sx_count", "perception", "count", 0, dur, "How many squares are on the screen? Answer with a single number.", "2", "numeric", 0)
         emit_probe("sx_two", "perception", "two_directions", 0, dur, "Are two squares moving in opposite horizontal directions? Answer yes or no.", "yes", "boolean", 0)
@@ -636,9 +656,21 @@ def main(argc: int, argv: u8&&) -> int:
                 final <- 1
                 ai <- ai + 1
             else:
-                np <- np + 1
-                p[np.usize()] <- ai if np <= 5
-                ai <- ai + 1
+                if sg_streq(argv[ai], "--variant"):
+                    if ai + 1 < argc:
+                        if sg_streq(argv[ai + 1], "no-vanish"):
+                            VAR_NV <- 1
+                        else:
+                            if sg_streq(argv[ai + 1], "no-reverse"):
+                                VAR_NR <- 1
+                            else:
+                                _ = printf("scenegen: unknown variant (have: no-vanish, no-reverse)\n".cast[u8&])
+                                return 2
+                    ai <- ai + 2
+                else:
+                    np <- np + 1
+                    p[np.usize()] <- ai if np <= 5
+                    ai <- ai + 1
 
     scene: u8& = argv[p[1.usize()]] if np >= 1 else "counter".cast[u8&]
     dir: cstr = argv[p[2.usize()]].cast[cstr] if np >= 2 else "/tmp/scenegen_out"
@@ -654,6 +686,16 @@ def main(argc: int, argv: u8&&) -> int:
     scene_id: i32 = 0 if sg_streq(scene, "counter") else (1 if sg_streq(scene, "counter-skip") else (2 if sg_streq(scene, "motion") else (3 if sg_streq(scene, "motion-trap") else (4 if sg_streq(scene, "crossing-swap") else (5 if sg_streq(scene, "occlude-vanish") else (6 if sg_streq(scene, "scroll-motion") else (7 if sg_streq(scene, "contact-merge") else -1)))))))
     if scene_id < 0:
         _ = printf("scenegen: unknown scene (have: counter, counter-skip, motion, motion-trap, crossing-swap, occlude-vanish, scroll-motion, contact-merge)\n".cast[u8&])
+        return 2
+    # variant compatibility: no-vanish is motion-trap only; no-reverse is motion / motion-trap
+    if VAR_NV == 1 and scene_id != 3:
+        _ = printf("scenegen: --variant no-vanish applies to motion-trap only\n".cast[u8&])
+        return 2
+    if VAR_NR == 1 and scene_id != 2 and scene_id != 3:
+        _ = printf("scenegen: --variant no-reverse applies to motion / motion-trap only\n".cast[u8&])
+        return 2
+    if VAR_NV == 1 and VAR_NR == 1:
+        _ = printf("scenegen: one variant at a time (a pair changes exactly one property)\n".cast[u8&])
         return 2
     setup_scene_params(scene_id, seed)
 

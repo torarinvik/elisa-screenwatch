@@ -19,6 +19,10 @@ global mutable SAMP: array[i16, 960000] = zeroed     # up to 60 s mono
 global mutable nsamp: i32 = 0
 global mutable rng: u64 = 88172645463325252          # xorshift64 seed (no overflow-trap ops)
 
+# V1.2 metamorphic variants: same scene, exactly ONE property removed (pair scoring)
+global mutable AV_NT: i32 = 0                        # no-transient (transient-in-noise, av-sync)
+global mutable AV_NTONE: i32 = 0                     # no-tone (tone-alarm)
+
 def streq(a: u8&, b: cstr) -> bool:
     i: mutable i32 = 0
     while a[i.usize()] != 0 and b[i.usize()] != 0:
@@ -81,6 +85,7 @@ def add_impact(off: i32, n: i32, amp: i32) -> void:
 def scene_transient_in_noise() -> i32:
     total: i32 = 20 * SR
     add_noise(0, total, 1200)                            # quiet pink-ish bed (-~28 dBFS)
+    total return if AV_NT == 1                           # no-transient: the bed alone (V1.2 pair)
     add_impact(ms_to_samples(4000), ms_to_samples(12), 26000)    # impact @ 4.00 s
     add_impact(ms_to_samples(9000), ms_to_samples(12), 26000)    # impact @ 9.00 s
     add_impact(ms_to_samples(9150), ms_to_samples(12), 26000)    # impact @ 9.15 s (150 ms later)
@@ -105,6 +110,7 @@ def scene_level_ramp() -> i32:
 
 def scene_tone_alarm() -> i32:
     total: i32 = 20 * SR
+    total return if AV_NTONE == 1                        # no-tone: same 20 s, no beeps (V1.2 pair)
     add_tone(ms_to_samples(2000), ms_to_samples(200), 1000, 14000)   # beep @ 2 s
     add_tone(ms_to_samples(4000), ms_to_samples(200), 1000, 14000)   # beep @ 4 s
     add_tone(ms_to_samples(6000), ms_to_samples(200), 1000, 14000)   # beep @ 6 s
@@ -112,6 +118,7 @@ def scene_tone_alarm() -> i32:
 
 def scene_av_sync() -> i32:
     total: i32 = 20 * SR
+    total return if AV_NT == 1                           # no-transient: 20 s of nothing (V1.2 pair)
     add_impact(ms_to_samples(10000), ms_to_samples(10), 30000)       # single impact @ exactly 10.000 s
     return total
 
@@ -167,8 +174,34 @@ def write_wav(path: cstr) -> i32:
 
 def main(argc: int, argv: u8&&) -> int:
     requires argc >= 0
-    scene: u8& = argv[1] if argc >= 2 else "transient-in-noise".cast[u8&]
-    out: cstr = argv[2].cast[cstr] if argc >= 3 else "/tmp/audiogen.wav"
+    # flags (--variant X) may appear anywhere; positionals keep their historical order
+    p: mutable array[int, 3] = [0, 0, 0]
+    np: mutable i32 = 0
+    ai: mutable int = 1
+    while ai < argc:
+        if streq(argv[ai], "--variant"):
+            if ai + 1 < argc:
+                if streq(argv[ai + 1], "no-transient"):
+                    AV_NT <- 1
+                else:
+                    if streq(argv[ai + 1], "no-tone"):
+                        AV_NTONE <- 1
+                    else:
+                        _ = printf("audiogen: unknown variant (have: no-transient, no-tone)\n".cast[u8&])
+                        return 2
+            ai <- ai + 2
+        else:
+            np <- np + 1
+            p[np.usize()] <- ai if np <= 2
+            ai <- ai + 1
+    scene: u8& = argv[p[1.usize()]] if np >= 1 else "transient-in-noise".cast[u8&]
+    out: cstr = argv[p[2.usize()]].cast[cstr] if np >= 2 else "/tmp/audiogen.wav"
+    if AV_NT == 1 and streq(scene, "transient-in-noise") == false and streq(scene, "av-sync") == false:
+        _ = printf("audiogen: --variant no-transient applies to transient-in-noise / av-sync only\n".cast[u8&])
+        return 2
+    if AV_NTONE == 1 and streq(scene, "tone-alarm") == false:
+        _ = printf("audiogen: --variant no-tone applies to tone-alarm only\n".cast[u8&])
+        return 2
     if streq(scene, "transient-in-noise"):
         nsamp <- scene_transient_in_noise()
     else:

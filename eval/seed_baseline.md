@@ -1,19 +1,20 @@
 # Seeded procedural baseline (V1.5) — first measurement
 
 Date: 2026-07-13. Tracker: current viola (pre-V3 upgrades). Runner: `eval/seed_test.sh 0 9`
-(6 tracker scenes x 10 development seeds, self-generated gold, 190 op-probes).
+(6 tracker scenes x 10 development seeds, self-generated gold; originally 190 op-probes, 200
+after V1.2 added the `st_rev` reversal probe to motion-trap — same single miss either way).
 
 ## Result
 
 | scene | score |
 |---|---|
 | motion | 50/50 |
-| motion-trap | 60/60 |
+| motion-trap | 70/70 |
 | crossing-swap | 29/30 |
 | occlude-vanish | 20/20 |
 | scroll-motion | 10/10 |
 | contact-merge | 20/20 |
-| **aggregate** | **189/190 (99.5%)** — bar: >= 95% (V1.9) |
+| **aggregate** | **199/200 (99.5%)** — bar: >= 95% (V1.9) |
 
 **Verdict: the tracker generalizes across seeded geometry — the fixed-scene 100% was NOT
 memorization.** Positions, sizes, lanes, event times and horizontal mirroring all vary per seed;
@@ -45,3 +46,25 @@ the physical scene** — identity-under-merge questions wait for V3.2's candidat
 
 Seeds 1000+ are the held-out pool (scenegen refuses without `--final`; seed_test.sh refuses
 entirely). Nothing in this pool has been run. First legitimate use: V3 graduation scoring.
+
+## Metamorphic-pair baseline (V1.2) — 2026-07-13
+
+Runner: `eval/meta_test.sh 0 9`. Pairs share a seed and diverge in exactly ONE property
+(no-reverse = hold at the reversal point; no-vanish = visible glide between the same endpoints).
+Credit requires the answer to CHANGE across the pair — identical answers on both sides reveal a
+prior and score 0 even when one side was "right".
+
+| pair | flip probes | score |
+|---|---|---|
+| motion / no-reverse | sm_rev | 10/10 |
+| motion-trap / no-vanish | st_gap, st_cont | 20/20 |
+| motion-trap / no-reverse | st_rev | 10/10 |
+| transient-in-noise / no-transient | atn_count, atn_cluster | 2/2 |
+| tone-alarm / no-tone | ata_count | 1/1 |
+| av-sync / no-transient | avs_impact, avs_count | 2/2 |
+| **metamorphic_sensitivity** | | **45/45 (100%)** |
+
+The symbolic tracker and the cymbal are fully evidence-driven on these pairs — expected, since it has no priors
+to leak. The battery's real target is the VLM member (V1.9 re-runs the Qwen motion traps under
+pair credit); this run establishes that the pairs themselves are answerable, so a VLM failure is
+a prior leaking, not an impossible probe.
