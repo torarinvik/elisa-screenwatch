@@ -95,7 +95,7 @@ def parse_log_events(path):
             continue
         t = int(m.group(1))
         rest = m.group(2)
-        rest = re.sub(r"\[batch[^\]]*\]", "", rest)      # drop evidence pointer
+        rest = re.sub(r"\[(?:batch|arch)\b[^\]]*\]", "", rest)   # drop evidence pointer (batch or arch seq)
         rest = re.sub(r"^[—\-]\s*", "", rest)            # v2 "— " lead
         rest = re.sub(r"^\[[^\]]*\]\s*", "", rest)       # v3 "[oN] " actor tag
         events.append((t, rest.strip()))

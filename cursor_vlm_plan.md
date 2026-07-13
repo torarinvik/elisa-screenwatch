@@ -13,7 +13,13 @@ motion both the 3B and 7B fail (honest 50%, traps 25%/75% confab — miss the va
 reversal an edge-bounce; density-invariant, so prior-fill not sampling), while the 3B is strong at
 text/scene. Trust policy FILLED IN (SPEC §I8): `describe` Inferred-only, split by claim type —
 text/scene usable, spatial-motion untrusted (needs symbolic corroboration, never an EVENT alone).
-Next: **M4** (live end-to-end describe query on real content) then **M5** (bake-off registration).
+**M4 done** (plumbing) — drove the full loop on a real 34s capture: escalation → `queries/q_v1.md`
+(type describe) → screenvlm ("LOVE CAMP 7") → `q_v1.answer.md` (INFERRED, OCR-corroborated) →
+boss consolidation into log.md with `[arch seq 31..85 t=4072..10946]`; evidence pointers re-decode,
+the event parses, the text claim re-grounds via `arch-ocr.sh` (OCR reads "LOVE CAMP" + "Video
+Nasties Ranked | Episode 1 | 72-61"). Standalone resource numbers from M1 (load ~10s, infer ~12s,
+peak RSS ~10.7 GB). Remaining M4 item: concurrent frame_dump+screenvlm pacing, which needs a live
+screen co-run. **M5 done** — bake-off candidate 7 registered (design note, below / eval/scenarios.md).
 
 ## 0. Motivation and thesis fit
 

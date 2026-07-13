@@ -140,3 +140,33 @@ edge). Perception ↑ better, confabulation ↓ better:
   **untrusted** — they may only raise an OPEN_QUESTION a symbolic verb (`compare`/churn) must
   resolve, and may never become a `story.md` EVENT. Reproduce: `eval/trap_test.sh motion` /
   `motion-trap` (add `MODEL=Qwen/Qwen2.5-VL-7B-Instruct` for the 7B audition).
+
+## Integration dry-run (M4) — the describe loop on real content
+
+Drove the full boss/sub-watcher `describe` loop once, by hand, against a real 34s capture (a
+YouTube "Video Nasties" clip, Tier-A ring intact): singer escalation (OCR-sparse video churn) →
+`queries/q_v1.md` (`type: describe`, `span: 4000,11000`) → screenvlm → `q_v1.answer.md` → boss
+consolidation into log.md. Verified: the answer ("LOVE CAMP 7") is a *text/scene* claim (the trusted
+kind); its evidence `[arch seq 31..85 t=4072..10946]` re-decodes to real frames; the consolidated
+event parses; and the claim **re-grounds symbolically** — `arch-ocr.sh` reads "LOVE CAMP" + "Video
+Nasties Ranked | Episode 1 | 72-61" on the same span, so OCR (the I8 authority) both corroborates the
+VLM and supplies the exact numbers the VLM omitted. Resource numbers (screenvlm standalone): load
+~10 s, infer ~12 s, peak RSS ~10.7 GB. The one un-measured item is *concurrent* frame_dump+screenvlm
+frame pacing, which needs a live screen co-run.
+
+## Bake-off candidate 7 (M5) — "VLM-cursor" (step-6 registration)
+
+For the step-6 representation bake-off, register **candidate 7: VLM-cursor**. The watcher's context
+receives only the text stream + cursor answers (`describe`/`ocr`/`compare` results as text) — **no
+images** — versus candidates 1–6 (including the serialized-tiles idea, which pushes pixels into the
+watcher's own context). The comparison must report cost in **two currencies separately**, because the
+VLM's whole thesis is that it moves perception out of one and into the other:
+
+- **context tokens** — tiles inflate this (pixels in-context); VLM-cursor keeps it flat (text only).
+- **wall-clock** — VLM-cursor pays here (~10 s load + ~12 s infer per describe call, local GPU);
+  tiles/OCR are comparatively cheap in time.
+
+Fairness rule: equal *total* budget, both axes tabulated, and — given the M3 trust policy — the
+VLM-cursor is scored only on the claim types it earns (text/scene), with spatial-motion questions
+routed to symbolic verbs for both candidates. No implementation here beyond this registration; the
+harness lands with step 6.
