@@ -125,6 +125,17 @@ edge). Perception ↑ better, confabulation ↓ better:
 | motion-trap | 3B | 16 | **25%** | 75% | count ✓; **missed the vanish** ("no"), reversal "**at the edge**" (prior), motion "**continuous**" |
 | motion-trap | 7B | 16 | **25%** | 75% | missed vanish, reversal "edge"; caught "not continuous" ✓ but count = **2** (spurious) |
 | motion-trap | 3.5-2B | 16 | **0%** | 100% | **all four wrong**: count 2, vanish "no", reversal "edge", motion "continuous" — pure prior-fill |
+| motion | 3-VL-2B | 16 | **25%** | 75% | (M8 proxy) direction/reversal wrong; prior-fill |
+| motion-trap | 3-VL-2B | 16 | **25%** | 75% | (M8 proxy) got the vanish (yes ✓) but reversal "edge", motion "continuous", count 2 |
+
+**M8 Marlin-2B — resolved via a non-gated proxy (Marlin itself is a gated repo).** Marlin-2B needs
+HuggingFace terms-acceptance + a token (a user-only action; a committed ready-to-run harness is at
+`eval/marlin_audition.py`). Its scientific question — *does a video-native small VLM in Marlin's family
+break the motion prior-fill?* — is answered **no** by the accessible proxy **Qwen3-VL-2B** (25% on both
+scenes, 75% confab). That makes **four** independent Qwen video models (2.5-VL-3B/7B, 3.5-2B, 3-VL-2B)
+that all prior-fill the motion traps (≤25% perception). Marlin is a Qwen3.5-2B fine-tune trained for
+*coarse* 2 FPS captioning, so it inherits this family prior with certainty — **coarse captioner only,
+never the motion authority** (the viola owns motion). The verdict needs no gated download to hold.
 
 **M7 Qwen3.5-2B audition (pre-registered decision).** The early-fusion Qwen3.5-2B runs on the existing
 harness unchanged (`MODEL=Qwen/Qwen3.5-2B ./eval/trap_test.sh …`). It is a *better honest-motion

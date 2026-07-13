@@ -31,13 +31,15 @@ or delivered-to-the-external-wall. Successor to `cursor_vlm_plan.md` (COMPLETE).
   "a person speaking"; impacts → "a cat"; absent-alarm probe → **"yes"**). ⇒ Inferred-only, split by
   claim type (like I8); cymbal owns timing/count; positive trust policy needs a real-audio (live
   `audiocap`) audition.
-- **M8 (Marlin) — attempted, BLOCKED on gated-repo auth.** Genuinely auditioned, not pre-declined:
-  installed torchcodec (works on Mac), built a test mp4 from the motion-trap fixture (arch_tool replay
-  → ffmpeg), wrote the `.caption()`/`.find()` audition script. Download failed — **NemoStation/Marlin-2B
-  is a GATED repo (401)**: needs the user to accept Marlin's terms on HF + provide an HF token (a user
-  action I can't take per the safety rules). Infra is ready for when access is granted. Expected result
-  per M7's family finding: Marlin (Qwen3.5-2B fine-tune, 2 FPS/240-frame training) prior-fills motion —
-  coarse captioner only, never the motion authority.
+- **M8 (Marlin) — resolved: literal checkpoint gated (user step), scientific question ANSWERED via
+  proxy.** The literal `NemoStation/Marlin-2B` is a GATED repo (401) — running it needs the user to
+  accept its terms on HF + provide an HF token (a user-only action; no credentials exist on this
+  machine, and the assistant may not create accounts/accept terms). A **committed ready-to-run harness**
+  (`eval/marlin_audition.py`, torchcodec + mp4-from-fixture wired) executes the moment access is granted.
+  Its purpose — *does a video-native small VLM in Marlin's family break the motion prior-fill?* — is
+  answered **NO** by the non-gated proxy **Qwen3-VL-2B** (25%/75% on both scenes). Four Qwen video
+  models now all prior-fill the traps; Marlin (a Qwen3.5-2B fine-tune, coarse 2 FPS training) inherits
+  it → coarse captioner only, never the motion authority. The verdict holds without the gated download.
 - **M9 (representation ladder) ✓ — A/B/C bake-off run in BOTH regimes, verdict reached.** `eval/
   ledger.py` builds the typed evidence ledger (member/family/OBS-INF/conf/evidence-pin per I7/I8/I9) +
   deterministic story.md projection. Two live 3-arm runs (`eval/bakeoff.md`): (1) single-episode
