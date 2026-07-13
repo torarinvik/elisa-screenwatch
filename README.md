@@ -36,12 +36,18 @@ and observe an unbounded stream while total memory stays compact — the point o
 | `archive.elisa` | Tier A exact-frame ring: XOR-delta + LZFSE, checksummed, byte-capped |
 | `arch_tool.elisa` | archive verifier + query engine: `verify` / `show` / `replay` / `compare` |
 | `arch-ocr.sh` | OCR an exact archived frame (resolve an evidence pin to positioned text) |
+| `tracker.elisa` | the **viola**: symbolic object-identity tracker over the delta stream (I9 OBS/INF) |
+| `audiocap.swift` | system-audio capture → 16 kHz mono PCM ring (`aud_*.pcm`) — live-verify pending |
+| `audiogen.elisa` | deterministic audio-scene synthesizer → WAV (the audio twin of scenegen) |
+| `audiotriage.elisa` | the **cymbal**: symbolic audio triage (512-pt FFT) → TRANSIENT/SILENCE/TONE/LEVEL_SHIFT |
+| `screenvlm.py` | the **violin**: local video-VLM (Qwen2.5-VL-3B) — `describe` cursor verb |
+| `screenaud.py` | the **sax**: local audio-LM (MiDashengLM-0.6B) — audition blocked on transformers version |
 | `screenasr.swift` | system-audio speech transcription (SpeechAnalyzer) — parked, ready |
 | `screenocr.swift` | Vision OCR CLI: positioned text, `--crop` region zoom |
 | `ocr_watch.sh` | eager OCR trigger on scene-change batches |
 | `SPEC.md` | system contracts: members, stream format v2, blackboard layout |
 | `watcher_protocol.md` | watcher/boss agent protocol (external memory, escalation) |
-| `eval/` | scoring harness: `score.py` (triage) + `score_memory.py` (watcher memory) + `scenarios.md` |
+| `eval/` | scoring harness: `score.py` (triage), `score_memory.py` (watcher memory), `trap_test.sh` (violin), `track_test.sh` (viola), `audio_test.sh` (cymbal) + `scenarios.md` |
 
 ## Build & run
 
