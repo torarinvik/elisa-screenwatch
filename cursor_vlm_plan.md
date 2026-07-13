@@ -1,6 +1,6 @@
 # Plan: the perception cursor + local-VLM member ("violin")
 
-Status: IN PROGRESS. Roadmap position: extends steps 4/7 (archive queries → attention-driven
+Status: COMPLETE (M1–M5). Roadmap position: extends steps 4/7 (archive queries → attention-driven
 retrieval) and feeds step 6 (representation bake-off, candidate 7).
 
 Progress: **M1 done** — `screenvlm` + `setup_vlm.sh` + repo-local `.venv-vlm`; verified on a live
@@ -17,9 +17,14 @@ text/scene usable, spatial-motion untrusted (needs symbolic corroboration, never
 (type describe) → screenvlm ("LOVE CAMP 7") → `q_v1.answer.md` (INFERRED, OCR-corroborated) →
 boss consolidation into log.md with `[arch seq 31..85 t=4072..10946]`; evidence pointers re-decode,
 the event parses, the text claim re-grounds via `arch-ocr.sh` (OCR reads "LOVE CAMP" + "Video
-Nasties Ranked | Episode 1 | 72-61"). Standalone resource numbers from M1 (load ~10s, infer ~12s,
-peak RSS ~10.7 GB). Remaining M4 item: concurrent frame_dump+screenvlm pacing, which needs a live
-screen co-run. **M5 done** — bake-off candidate 7 registered (design note, below / eval/scenarios.md).
+Nasties Ranked | Episode 1 | 72-61"). Resource numbers: M1 standalone (load ~10s, infer ~12s, peak
+RSS ~10.7 GB) plus a live co-run — recorder throughput 7.75 fps under VLM load vs 4.15 fps idle
+(the VLM does not starve the change-driven recorder; screenvlm peak ~11.7 GB, within 24 GB).
+**M5 done** — bake-off candidate 7 registered (design note, below / eval/scenarios.md).
+
+All milestones M1–M5 complete. The honest headline: the violin is a strong *text/scene* reader that
+runs safely beside the recorder, but local Qwen2.5-VL (3B and 7B) cannot be trusted for abstract
+spatial-motion event semantics — so the `describe` verb earns trust by claim type, not blanket.
 
 ## 0. Motivation and thesis fit
 

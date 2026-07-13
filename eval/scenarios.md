@@ -151,8 +151,15 @@ kind); its evidence `[arch seq 31..85 t=4072..10946]` re-decodes to real frames;
 event parses; and the claim **re-grounds symbolically** — `arch-ocr.sh` reads "LOVE CAMP" + "Video
 Nasties Ranked | Episode 1 | 72-61" on the same span, so OCR (the I8 authority) both corroborates the
 VLM and supplies the exact numbers the VLM omitted. Resource numbers (screenvlm standalone): load
-~10 s, infer ~12 s, peak RSS ~10.7 GB. The one un-measured item is *concurrent* frame_dump+screenvlm
-frame pacing, which needs a live screen co-run.
+~10 s, infer ~12 s, peak RSS ~10.7 GB.
+
+**Concurrent co-run (measured).** frame_dump recording live while a screenvlm describe call ran:
+recorder throughput was **7.75 fps under VLM load vs 4.15 fps idle baseline** — i.e. the VLM did
+*not* starve the recorder (the rate tracks screen churn, since ScreenCaptureKit is change-driven, not
+VLM contention). screenvlm peak RSS ~11.7 GB, comfortably within 24 GB beside the recorder; the run
+cleanly stopped with no orphan. Incidental: frame_dump's real-world capture rate is ~4–8 fps
+(full-res XOR+LZFSE archiving + change-driven delivery), well under the nominal 24 — a pre-existing
+property of the exact-ring tier, not a regression. M4 resource numbers complete.
 
 ## Bake-off candidate 7 (M5) — "VLM-cursor" (step-6 registration)
 
