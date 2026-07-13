@@ -1,0 +1,7 @@
+{"type": "phase", "t0": 0, "t1": 20000, "label": "upper square passes behind a block; lower square vanishes", "activity": "video"}
+{"type": "fact", "t0": 0, "t1": 20000, "key": "object_count_peak", "value": "3"}
+{"type": "fact", "t0": 8000, "t1": 11000, "key": "occlusion", "value": "yes"}
+{"type": "fact", "t0": 8000, "t1": 20000, "key": "lower_vanished", "value": "yes"}
+{"type": "event", "t": 0, "id": "e0", "desc": "upper square, lower square, and a static block are present", "object": "o1"}
+{"type": "event", "t": 8000, "id": "e1", "desc": "the lower square vanishes for good", "object": "o2"}
+{"type": "event", "t": 9000, "id": "e2", "desc": "the upper square passes behind the block (occluded)", "object": "o1"}

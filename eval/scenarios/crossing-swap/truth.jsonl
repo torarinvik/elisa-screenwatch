@@ -1,0 +1,5 @@
+{"type": "phase", "t0": 0, "t1": 20000, "label": "two squares cross paths", "activity": "video"}
+{"type": "fact", "t0": 0, "t1": 20000, "key": "object_count", "value": "2"}
+{"type": "fact", "t0": 0, "t1": 20000, "key": "opposite_motion", "value": "yes"}
+{"type": "event", "t": 0, "id": "e0", "desc": "square A appears at left moving right, square B at right moving left", "object": "o1"}
+{"type": "event", "t": 10000, "id": "e1", "desc": "the two squares cross near the center", "object": "o2"}

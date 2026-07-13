@@ -30,9 +30,11 @@ global MAX_TRACKS: i32 = 64
 global MAX_COMPS: i32 = 512
 global MIN_AREA: i32 = 4         # components smaller than this are noise, dropped
 global GATE_BASE: i32 = 8        # association distance gate (cells), grows with speed
-global LOST_MAX: i32 = 12        # frames a track may coast unmatched before ENDED
+global LOST_MAX: i32 = 12        # frames an unmatched track coasts before VANISH (open field)
+global OCC_MAX: i32 = 80         # extended patience while a track sits behind a static occluder
 global MOVE_MIN: i32 = 4         # displacement (cells) to first commit a direction
-global REV_HYST: i32 = 6         # pullback (cells) from the extreme to confirm a REVERSE
+global REV_HYST: i32 = 10        # pullback (cells) to confirm a REVERSE — above occluder merge-drag,
+                                 # well below a real reversal's pullback (whole-field sweeps)
 
 # ---- file buffer + cursor ----
 global mutable FBUF: array[u8, 4194304] = zeroed
@@ -70,6 +72,9 @@ global mutable TR_DIR: array[i32, 64] = zeroed     # +1 right, -1 left, 0 undete
 global mutable TR_EXT: array[i32, 64] = zeroed     # extreme x reached in the current direction
 global mutable TR_STARTX: array[i32, 64] = zeroed  # x when direction was last (re)set
 global mutable TR_MATCHED: array[u8, 64] = zeroed
+global mutable TR_HW: array[i32, 64] = zeroed      # bbox half-width (cells), last matched
+global mutable TR_HH: array[i32, 64] = zeroed      # bbox half-height (cells), last matched
+global mutable TR_OCC: array[u8, 64] = zeroed      # 1 while believed occluded (extended patience)
 global mutable next_id: i32 = 1
 
 # grid dims for the batch currently being parsed
@@ -326,11 +331,29 @@ def new_track(cj: i32, t: i64) -> void:
     TR_EXT[ti.usize()] <- CM_CX[cj.usize()]
     TR_STARTX[ti.usize()] <- CM_CX[cj.usize()]
     TR_MATCHED[ti.usize()] <- 1
+    TR_HW[ti.usize()] <- (CM_MAXX[cj.usize()] - CM_MINX[cj.usize()]) / 2
+    TR_HH[ti.usize()] <- (CM_MAXY[cj.usize()] - CM_MINY[cj.usize()]) / 2
+    TR_OCC[ti.usize()] <- 0
     emit_event(id, "APPEAR", t, CM_CX[cj.usize()], CM_CY[cj.usize()], 90)
 
 # absolute value helper
 def iabs(v: i32) -> i32:
     return (0 - v) if v < 0 else v
+
+# Is track ti's predicted box overlapping some OTHER matched, (near-)stationary, >=-as-large track?
+# That is the symbolic signature of occlusion (something passed behind a static object) as opposed to
+# a genuine open-field disappearance — an INFERENCE, hence the OCCLUDED event carries lower conf.
+def occluder_overlap(ti: i32) -> bool:
+    px: i32 = TR_CX[ti.usize()] + TR_VX[ti.usize()]
+    py: i32 = TR_CY[ti.usize()] + TR_VY[ti.usize()]
+    for oj in 0..<MAX_TRACKS:
+        continue if oj == ti or TR_ALIVE[oj.usize()] == 0 or TR_MATCHED[oj.usize()] == 0
+        continue if iabs(TR_VX[oj.usize()]) + iabs(TR_VY[oj.usize()]) > 1     # occluder must be static
+        continue if TR_AREA[oj.usize()] < TR_AREA[ti.usize()]                 # and at least as large
+        dx: i32 = iabs(px - TR_CX[oj.usize()])
+        dy: i32 = iabs(py - TR_CY[oj.usize()])
+        true return if dx <= TR_HW[ti.usize()] + TR_HW[oj.usize()] + 2 and dy <= TR_HH[ti.usize()] + TR_HH[oj.usize()] + 2
+    return false
 
 # associate this frame's components to existing tracks, update lifecycle, emit INF records.
 def associate(ncomp: i32, t: i64) -> void:
@@ -367,16 +390,24 @@ def associate(ncomp: i32, t: i64) -> void:
             TR_CX[ti.usize()] <- CM_CX[cj.usize()]
             TR_CY[ti.usize()] <- CM_CY[cj.usize()]
             TR_AREA[ti.usize()] <- CM_AREA[cj.usize()]
+            TR_HW[ti.usize()] <- (CM_MAXX[cj.usize()] - CM_MINX[cj.usize()]) / 2
+            TR_HH[ti.usize()] <- (CM_MAXY[cj.usize()] - CM_MINY[cj.usize()]) / 2
             TR_STATE[ti.usize()] <- 0
             TR_LOST[ti.usize()] <- 0
+            TR_OCC[ti.usize()] <- 0
             emit_event(TR_ID[ti.usize()], "REACQUIRE", t, CM_CX[cj.usize()], CM_CY[cj.usize()], 60) if was_lost
             update_dir(ti, CM_CX[cj.usize()], t, CM_CY[cj.usize()])
-    # unmatched alive tracks: coast, then LOST -> ENDED (VANISH)
+    # unmatched alive tracks: coast, then end. A track behind a static occluder is OCCLUDED (extended
+    # patience, may REACQUIRE); one that disappears in the open field VANISHes after LOST_MAX.
     for ti in 0..<MAX_TRACKS:
         continue if TR_ALIVE[ti.usize()] == 0
         continue if TR_MATCHED[ti.usize()] != 0
+        if TR_OCC[ti.usize()] == 0 and occluder_overlap(ti):
+            TR_OCC[ti.usize()] <- 1
+            emit_event(TR_ID[ti.usize()], "OCCLUDED", t, TR_CX[ti.usize()], TR_CY[ti.usize()], 55)
         TR_LOST[ti.usize()] <- TR_LOST[ti.usize()] + 1
-        if TR_LOST[ti.usize()] > LOST_MAX:
+        budget: i32 = OCC_MAX if TR_OCC[ti.usize()] == 1 else LOST_MAX
+        if TR_LOST[ti.usize()] > budget:
             emit_event(TR_ID[ti.usize()], "VANISH", t, TR_CX[ti.usize()], TR_CY[ti.usize()], 70)
             TR_ALIVE[ti.usize()] <- 0
         else:

@@ -1,0 +1,2 @@
+{"id": "cs_count", "ask_t": 5000, "kind": "perception", "span": [0, 20000], "op": "count", "q": "How many squares are on the screen? Answer with a single number.", "gold": "2", "match": "numeric", "fact_t": 0}
+{"id": "cs_two_dirs", "ask_t": 8000, "kind": "perception", "span": [0, 20000], "op": "two_directions", "q": "Are two squares moving in opposite horizontal directions? Answer yes or no.", "gold": "yes", "match": "boolean", "fact_t": 0}

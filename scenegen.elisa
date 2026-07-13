@@ -147,6 +147,85 @@ def scene_motion_trap(t_ms: i64) -> void:
                 x <- 420 - (380 * tt2) / 6000         # 420 -> 40, mid-field reversal (edge is 580)
     draw_square(x.i32(), 15790320) if visible
 
+# ---- tracker (viola) trap scenes — exact-by-construction ground truth (orchestra_v2_plan.md M2) --
+
+# Draw a square with its TOP-LEFT at (x,y) (motion scenes use a fixed mid-height row; these need
+# independent vertical lanes so two objects can pass without their grids colliding).
+def draw_square_at(x: i32, y: i32, color: u32) -> void:
+    fill_rect(x, y, SQ, SQ, color)
+
+# crossing-swap: two squares of identical size cross in X, on lanes 12px apart in Y so their bboxes
+# overlap mid-crossing (t~9.5-10.5s) but never share a cell. A: left->right; B: right->left. Truth
+# records which exits where; a CONFIDENT identity swap after the crossing scores worse than an honest
+# UNKNOWN. Different fills (A brighter) so a perfect tracker COULD tell them apart — but the grid is
+# luminance-only, so post-crossing identity is genuinely ambiguous.
+def scene_crossing_swap(t_ms: i64) -> void:
+    fill_bg(2105376)
+    tt: i64 = t_ms if t_ms < 20000 else 20000
+    ax: i64 = 40 + (500 * tt) / 20000                 # A: 40 -> 540 (right)
+    bx: i64 = 540 - (500 * tt) / 20000                # B: 540 -> 40 (left)
+    ay: i32 = SG_H / 2 - SQ / 2 - 6                    # A lane (upper)
+    by: i32 = SG_H / 2 - SQ / 2 + 6                    # B lane (lower)
+    draw_square_at(ax.i32(), ay, 15790320)            # A near-white
+    draw_square_at(bx.i32(), by, 10066329)            # B mid-grey 0x00999999
+
+# occlude-vs-vanish: a static block mid-field. Square A (upper lane) moves right and passes BEHIND
+# the block (drawn after A, so it hides A) for t~8-11s, then re-emerges. Square B (lower lane) moves
+# right and genuinely VANISHES at t=8s, never returning. A must be REACQUIRED (occlusion), B must
+# end as VANISH — the discrimination the tracker has to earn.
+def scene_occlude_vanish(t_ms: i64) -> void:
+    fill_bg(2105376)                                  # dominant dark background (clean mode)
+    ay: i32 = 60                                      # A lane: y 60..120 (upper)
+    by: i32 = 280                                     # B lane: y 280..340 (far lower, clear of block)
+    tt: i64 = t_ms if t_ms < 20000 else 20000
+    ax: i64 = 40 + (520 * tt) / 20000                 # A: 40 -> 560, steady right, constant velocity
+    draw_square_at(ax.i32(), ay, 15790320)            # A
+    if t_ms < 8000:
+        bx: i64 = 40 + (400 * t_ms) / 8000            # B: 40 -> 440, then VANISHES for good at t=8s
+        draw_square_at(bx.i32(), by, 15790320)
+    # static occluder: a tall, narrow grey block spanning A's lane in Y, drawn LAST so it hides A when
+    # behind. A (x..x+60) is fully behind while x in ~[250..310] -> t ~ 8.1..10.4s (~2.3s > LOST_MAX,
+    # < OCC_MAX, so REACQUIRE must win over a false VANISH). The block is much larger than A so its
+    # centroid barely drags when A merges at the boundary (no spurious REVERSE on a static object).
+    fill_rect(250, 20, 120, 140, 12303291)            # x 250..370, y 20..160; 0x00BBBBBB
+
+# scroll-vs-motion: the whole background scrolls left (a striped field shifting 2px/frame-ish over
+# t=5-10s) while one square moves right INDEPENDENTLY. The tracker's SHIFT-aware path must report the
+# square's velocity in SCENE coords, not contaminated by the global scroll.
+def scene_scroll_motion(t_ms: i64) -> void:
+    # striped background whose phase shifts with time during the scroll window
+    shift: mutable i64 = 0
+    if t_ms >= 5000:
+        st: i64 = t_ms - 5000
+        st2: i64 = st if st < 5000 else 5000
+        shift <- (120 * st2) / 5000                   # 0 -> 120 px leftward over 5s
+    y: mutable i32 = 0
+    while y < SG_H:
+        x: mutable i32 = 0
+        while x < SG_W:
+            phase: i64 = (x.i64() + shift) / 40
+            col: u32 = 3355443 if (phase % 2) == 0 else 5263440    # two dim greys, 40px stripes
+            fill_rect(x, y, 40, 20, col)
+            x <- x + 40
+        y <- y + 20
+    tt: i64 = t_ms if t_ms < 20000 else 20000
+    sx: i64 = 60 + (460 * tt) / 20000                 # square moves right, independent of the scroll
+    draw_square_at(sx.i32(), SG_H / 2 - SQ / 2, 15790320)
+
+# contact-merge: two squares approach on the SAME lane. They touch/overlap for ~600ms around
+# t=10s, then separate. CONTACT? must fire on the overlap (bboxes intersect) and the tracks must
+# re-separate cleanly afterward — overlap is an INFERRED contact, not a certainty.
+def scene_contact_merge(t_ms: i64) -> void:
+    fill_bg(2105376)
+    y: i32 = SG_H / 2 - SQ / 2
+    tt: i64 = t_ms if t_ms < 20000 else 20000
+    # A comes from the left, B from the right; they meet near center at t~10s then reverse apart
+    half: i64 = tt if tt < 10000 else (20000 - tt)
+    ax: i64 = 40 + (230 * half) / 10000               # 40 -> 270 -> 40
+    bx: i64 = 540 - (230 * half) / 10000              # 540 -> 310 -> 540
+    draw_square_at(ax.i32(), y, 15790320)
+    draw_square_at(bx.i32(), y, 15790320)
+
 def render_scene(scene_id: i32, t_ms: i64) -> void:
     if scene_id == 1:
         scene_counter_skip(t_ms)
@@ -157,7 +236,19 @@ def render_scene(scene_id: i32, t_ms: i64) -> void:
             if scene_id == 3:
                 scene_motion_trap(t_ms)
             else:
-                scene_counter(t_ms)
+                if scene_id == 4:
+                    scene_crossing_swap(t_ms)
+                else:
+                    if scene_id == 5:
+                        scene_occlude_vanish(t_ms)
+                    else:
+                        if scene_id == 6:
+                            scene_scroll_motion(t_ms)
+                        else:
+                            if scene_id == 7:
+                                scene_contact_merge(t_ms)
+                            else:
+                                scene_counter(t_ms)
 
 # ---- driver ------------------------------------------------------------------------------------
 
@@ -169,9 +260,9 @@ def main(argc: int, argv: u8&&) -> int:
     fps: i32 = clamp_i32(arg_i32(argc, argv, 4, 10), 1, 60)
     dur_ms: i64 = at_least(arg_i32(argc, argv, 5, 20000), 1000).i64()
 
-    scene_id: i32 = 0 if sg_streq(scene, "counter") else (1 if sg_streq(scene, "counter-skip") else (2 if sg_streq(scene, "motion") else (3 if sg_streq(scene, "motion-trap") else -1)))
+    scene_id: i32 = 0 if sg_streq(scene, "counter") else (1 if sg_streq(scene, "counter-skip") else (2 if sg_streq(scene, "motion") else (3 if sg_streq(scene, "motion-trap") else (4 if sg_streq(scene, "crossing-swap") else (5 if sg_streq(scene, "occlude-vanish") else (6 if sg_streq(scene, "scroll-motion") else (7 if sg_streq(scene, "contact-merge") else -1)))))))
     if scene_id < 0:
-        _ = printf("scenegen: unknown scene (have: counter, counter-skip, motion, motion-trap)\n".cast[u8&])
+        _ = printf("scenegen: unknown scene (have: counter, counter-skip, motion, motion-trap, crossing-swap, occlude-vanish, scroll-motion, contact-merge)\n".cast[u8&])
         return 2
 
     _ = mkdir(dir.cast[u8&], 493)
