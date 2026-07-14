@@ -78,3 +78,35 @@ Cross-cutting finding (both runs): **provenance discipline — OBSERVED-vs-INFER
 neural (I8/I9) — is what defeats the prior-fill, independent of representation format.** Every rung
 resisted the VLM in every run because every rung carried the trust tagging. The representation choice is
 a *cost* decision (B wins); the *faithfulness* comes from provenance, which is the project thesis.
+
+## Rung B+ — minimal supersession (V2), 2026-07-14
+
+The shared 25% miss in run 1 was `pt_count = 2` (gold 1): the tracker frames the post-vanish
+reappearance as a *new* object, so counting distinct ids gives 2, and no rung could answer 1 without
+asserting object-permanence world-knowledge the symbolic layer must not (I9). V2 fixes this at the
+SCHEMA level rather than by asserting permanence — `eval/ledger.py` now derives a **supersession**:
+the `VANISH(o1)@7800 → APPEAR(o2)@8600` pair becomes an INFERRED `REACQUIRE_CANDIDATE` record that
+supersedes the VANISH and carries an explicit candidate set:
+
+```
+same-object (occlusion): o1==o2   → 1 distinct   conf 36
+new-object: o2 is separate        → 2 distinct   conf 64      (conf splits on the 800ms gap + 48px move)
+```
+
+So `pt_count` is answered by an honest split — "1 if same (occlusion), 2 if new, evidence: 800ms
+no-component gap" — not a flat 2, and no permanence claim is fabricated. Acceptance
+(`eval/v2_supersession_test.sh`, deterministic, seeds 0/3/7):
+
+- **THE ONE LAW enforced** — `supersedes` may only point at an INFERRED record; a supersession
+  targeting an OBSERVED (evidence) record hard-fails `build`/`validate` (negative test passes).
+- **Clean projection** hides the retired VANISH; `project --audit` preserves it under `revisions:`
+  (evidence is never rewritten — only the interpretation retires).
+- **`revision` probe passes** — "what did the system originally believe about o1, and why did it
+  change?" is answerable *only* because the superseded VANISH is preserved. This is the probe that
+  makes the schema pay measured rent.
+- **Cost:** rung B+ adds **~655 bytes** over plain rung B (1350 → 2004) for one supersession — the
+  measured price of revisability. Unlike C's identity index (which no probe rewarded), B+ earns its
+  bytes: the `revision` probe and the candidate-split `pt_count` both fail without it.
+
+This is the schema V3.2's tentative reacquisition writes into; it lands BEFORE the tracker produces
+revisable interpretations, per the plan's ordering.

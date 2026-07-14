@@ -299,10 +299,14 @@ INFERRED  track-17 OCCLUDED, reacquired as track-19 (candidates {17-continues, n
 
 ### V2.4 Acceptance
 
-- [ ] Law enforced: build-time hard error on OBSERVED-targeting supersession (negative test).
-- [ ] Re-run bake-off run 1 with supersession: the reacquire case now answers pt_count with the
+- [x] Law enforced: build-time hard error on OBSERVED-targeting supersession (negative test).
+      **DONE 2026-07-14** — `eval/ledger.py validate`/`build` hard-fail; `eval/v2_supersession_test.sh`.
+- [x] Re-run bake-off run 1 with supersession: the reacquire case now answers pt_count with the
       candidate split ("1 if same object (occlusion), 2 if new — evidence: no-component gap")
-      and the `revision` probe passes. Bytes overhead vs plain rung B measured and reported
+      and the `revision` probe passes. Bytes overhead vs plain rung B measured and reported.
+      **DONE 2026-07-14** — motion-trap `VANISH(o1)→APPEAR(o2)` yields a `REACQUIRE_CANDIDATE`
+      superseding the VANISH with the {1-if-same, 2-if-new} split; `revision o1` recovers the retired
+      belief; overhead ~655 bytes (rung B 1350 → B+ 2004). Recorded in `eval/bakeoff.md` (Rung B+).
       (expected: small; if > ~20% revisit the field encoding).
 - [ ] All prior bake-off probes still pass (no regression).
 
