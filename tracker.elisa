@@ -322,6 +322,23 @@ def emit_event(id: i32, kind: cstr, t: i64, cx: i32, cy: i32, conf: i32) -> void
 # V3.0 restraint verdict: instead of a physical-motion claim, record that the region changed but is
 # NOT a trackable persistent object. OBSERVED changed-regions stay (the comps were already emitted);
 # this is the INFERRED activity classification that replaces the suppressed claim.
+# V3.2 merge-drag dispute: a reacquired component that ANOTHER live track also predicts onto is a
+# contested identity (two objects merged into one blob) — record it so the ledger treats the reacquire
+# as a DISPUTED candidate {this track | the contester} rather than a silent confident identity steal.
+def emit_dispute(id: i32, t: i64, cx: i32, cy: i32, other_id: i32) -> void:
+    ob_str("INF dispute id=")
+    ob_dec(id.i64())
+    ob_str(" t=")
+    ob_dec(t)
+    ob_str(" cx=")
+    ob_dec(cx.i64())
+    ob_str(" cy=")
+    ob_dec(cy.i64())
+    ob_str(" contests=")
+    ob_dec(other_id.i64())
+    ob_byte(10)
+    ob_flush()
+
 def emit_activity(id: i32, t: i64, cx: i32, cy: i32, reason: cstr) -> void:
     ob_str("INF activity id=")
     ob_dec(id.i64())
@@ -450,6 +467,19 @@ def new_track(cj: i32, t: i64) -> void:
 def iabs(v: i32) -> i32:
     return (0 - v) if v < 0 else v
 
+# V3.2: does another alive track ALSO predict onto (cx,cy) within its own gate? Returns that track's id
+# (the contester) or 0. The signature of a merge — two tracked objects collapsing onto one component.
+def contested_by(cx: i32, cy: i32, self_ti: i32) -> i32:
+    for oj in 0..<MAX_TRACKS:
+        continue if oj == self_ti or TR_ALIVE[oj.usize()] == 0
+        px: i32 = TR_CX[oj.usize()] + TR_VX[oj.usize()]
+        py: i32 = TR_CY[oj.usize()] + TR_VY[oj.usize()]
+        g: i32 = GATE_BASE + 2 * (iabs(TR_VX[oj.usize()]) + iabs(TR_VY[oj.usize()]))
+        dx: i32 = cx - px
+        dy: i32 = cy - py
+        TR_ID[oj.usize()] return if dx * dx + dy * dy <= g * g
+    return 0
+
 # Is track ti's predicted box overlapping some OTHER matched, (near-)stationary, >=-as-large track?
 # That is the symbolic signature of occlusion (something passed behind a static object) as opposed to
 # a genuine open-field disappearance — an INFERENCE, hence the OCCLUDED event carries lower conf.
@@ -519,7 +549,10 @@ def associate(ncomp: i32, t: i64) -> void:
             TR_XMIN[ti.usize()] <- CM_CX[cj.usize()] if CM_CX[cj.usize()] < TR_XMIN[ti.usize()]
             TR_XMAX[ti.usize()] <- CM_CX[cj.usize()] if CM_CX[cj.usize()] > TR_XMAX[ti.usize()]
             classify_track(ti, t)                    # leg A: flag UI pointers before any identity claim
-            emit_event_c(TR_ID[ti.usize()], "REACQUIRE", t, CM_CX[cj.usize()], CM_CY[cj.usize()], 60, detq(TR_AREA[ti.usize()]), TR_AM[ti.usize()], 60) if was_lost and TR_UIF[ti.usize()] == 0
+            if was_lost and TR_UIF[ti.usize()] == 0:
+                emit_event_c(TR_ID[ti.usize()], "REACQUIRE", t, CM_CX[cj.usize()], CM_CY[cj.usize()], 60, detq(TR_AREA[ti.usize()]), TR_AM[ti.usize()], 60)
+                oc: i32 = contested_by(CM_CX[cj.usize()], CM_CY[cj.usize()], ti)   # V3.2 merge-drag dispute
+                emit_dispute(TR_ID[ti.usize()], t, CM_CX[cj.usize()], CM_CY[cj.usize()], oc) if oc > 0
             # V3.1 (OC-SORT observation-centric): on reacquire, re-seed direction from the FIRST post-
             # reacquire motion instead of trusting the pre-occlusion direction coasted through the gap.
             # Direction is already frozen while unmatched (update_dir runs only on matched frames); this

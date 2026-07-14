@@ -432,6 +432,23 @@ per scene region by measured trackability, never granted globally.
   decide**: backward consistency is one more `association_basis` raising a candidate's
   confidence inside the DISPUTED set — only later corroboration (or held-out evaluation) lets
   the identity graduate. An ambiguous reappearance is never silently turned into the original id.
+- **Implemented (2026-07-14) — split by measured safety.** Two forms of candidate/dispute, and a hard
+  lesson from the association experiments:
+    - **Merge dispute (DONE):** `contested_by` in `tracker.elisa` emits `INF dispute id=.. contests=..`
+      when a reacquired blob is also claimed by another live track; `ledger.py` turns that into a
+      `status=disputed` REACQUIRE with the candidate set {track A | track B}. This is the first live
+      dispute (the merge case). Verified on `contact-merge`.
+    - **Occlusion candidate (at the LEDGER, not the tracker):** experiments showed a WIDE tracker-level
+      reacquire gate to catch far-side re-emergence *fabricates identities in clutter* — boxing RQ
+      227→386, and it harmed the go do-no-harm control. Rejected. The vanish+rebirth of a far re-emergence
+      is instead paired by the ledger's V2 `detect_reacquires` into a `REACQUIRE_CANDIDATE` supersession
+      — tentative reacquisition lives in the schema, exactly as V2 intended. Caveat recorded: when the
+      coasted track VANISHes *after* the re-emergence has already APPEARed (reverse temporal order), the
+      current `detect_reacquires` (VANISH→later-APPEAR) does not pair them; the `direction_after_reacquire`
+      op falls back to the last APPEAR. A symmetric pairing is a cheap future ledger addition.
+    - **ORU is DEFERRED with a trigger:** backward velocity re-update only earns its keep once a measured
+      occlusion-reacquire *failure* on a held-out fixture shows it would disambiguate — no anticipatory
+      complexity (the plan's own rule).
 
 ### V3.2b Weak-component provisional tier (ByteTrack's insight, symbolically)
 
@@ -442,6 +459,13 @@ per scene region by measured trackability, never granted globally.
   when our tracker currently goes blind. Cheap: they are computed before the threshold drops
   them. A provisional match raises a reacquire candidate's confidence; it never creates a claim
   on its own.
+- **DEFERRED with a trigger (2026-07-14).** The provisional tier *feeds reacquisition*, and the V3.1/V3.2
+  experiments established that widening reacquisition inputs is precisely what harms the do-no-harm
+  controls (every wider-input variant fabricated identities on go/boxing). At the current grid resolution
+  `MIN_AREA=4` is already 1–3 cells (near-noise), so the safe upside is marginal. Per the plan's
+  earn-your-complexity rule, this lands only when a measured occlusion/merge failure on a HELD-OUT R1
+  fixture shows a specific sub-`MIN_AREA` component would have disambiguated a candidate set — the trigger,
+  recorded, not anticipated.
 
 ### V3.3 Two-dimensional global translation (generalize `SHIFT`)
 
@@ -535,8 +559,14 @@ per scene region by measured trackability, never granted globally.
       prediction through an occlusion** (Larry was OCCLUDED at t=7000 and hidden thereafter; the tracker
       imagined him sweeping left), so this is correct restraint, not harm. go/pharo untouched.
 - [ ] scroll-plus-motion: both motions separated on dev + held-out seeds.
-- [ ] merge-drag trap (the v2 documented failure): candidate sets prevent the silent identity
+- [x] merge-drag trap (the v2 documented failure): candidate sets prevent the silent identity
       steal — the merge emits disputed candidates instead of a confident wrong track.
+      **DONE 2026-07-14** — the tracker emits `INF dispute id=.. contests=..` when a reacquired blob is
+      ALSO predicted onto by another live track (`contested_by`), and `ledger.py` turns that REACQUIRE
+      into a `status=disputed` record with an explicit candidate set {blob is track A | blob is track B —
+      identity stolen by the merge}, conf split 50/50. Verified on `contact-merge` seed 0: id=1's reacquire
+      of the meeting-point blob (also claimed by track 3) projects as DISPUTED, not a silent steal. v2
+      supersession test still passes (additive `INF dispute` lines; existing probes unaffected).
 - [ ] All 9 original suites + V1 twins still green (no regression — the traps are now the
       regression suite, which is their correct final role).
 - [ ] PoP ≥ 80% on annotated probes; pharo restraint probe passes; LSL2 held-out run recorded

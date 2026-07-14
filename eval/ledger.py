@@ -45,6 +45,14 @@ def tracker_events(fixture):
         return []
     r = subprocess.run([tracker, "run", fixture], capture_output=True, text=True)
     recs = []
+    # V3.2: INF dispute lines mark a REACQUIRE whose component another live track also claimed (a merge).
+    # Keyed by (id, t) so the matching REACQUIRE record becomes a DISPUTED candidate, not a silent steal.
+    disputes = {}
+    for ln in r.stdout.splitlines():
+        p = ln.split()
+        if len(p) >= 2 and p[0] == "INF" and p[1] == "dispute":
+            kv = dict(tok.split("=", 1) for tok in p if "=" in tok)
+            disputes[(kv["id"], int(kv["t"]))] = kv.get("contests", "0")
     KIND = {"APPEAR": "object appears", "VANISH": "object vanishes",
             "REVERSE": "object reverses direction", "REACQUIRE": "object reacquired",
             "OCCLUDED": "object occluded (passes behind another)"}
@@ -58,7 +66,8 @@ def tracker_events(fixture):
                 k, v = tok.split("=", 1)
                 kv[k] = v
         t = int(kv["t"])
-        recs.append({
+        disp = disputes.get((kv["id"], t))
+        rec = {
             "t0": t, "t1": t, "kind": kv["kind"],
             "summary": f"{KIND.get(kv['kind'], kv['kind'])} (track {kv['id']}) at cx={kv.get('cx','?')}",
             "member": "viola", "family": "symbolic-tracker",
@@ -67,7 +76,19 @@ def tracker_events(fixture):
             "license": f"viola:{kv['kind']}",
             "evidence": f"[track id={kv['id']} t={t} cx={kv.get('cx','?')}]",
             "cx": int(kv["cx"]) if kv.get("cx", "?").lstrip("-").isdigit() else None,
-        })
+        }
+        if disp is not None and kv["kind"] == "REACQUIRE":
+            # Merge-drag: the reacquired blob was ALSO claimed by track `disp`. Record the identity as
+            # DISPUTED with an explicit candidate set instead of a confident (possibly stolen) identity.
+            rec["status"] = "disputed"
+            rec["summary"] = (f"track {kv['id']} reacquired a blob ALSO claimed by track {disp} "
+                              f"at cx={kv.get('cx','?')} — identity DISPUTED (merge)")
+            rec["license"] = "viola:reacquire-disputed"
+            rec["candidates"] = [
+                {"label": f"blob is track {kv['id']} (o{kv['id']})", "distinct_count": 2, "conf": 50},
+                {"label": f"blob is track {disp} (o{disp}) — identity stolen by the merge",
+                 "distinct_count": 2, "conf": 50}]
+        recs.append(rec)
     return recs
 
 
