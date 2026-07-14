@@ -24,7 +24,7 @@ if [ "$HI" -ge 1000 ]; then
 fi
 
 total=0; correct=0
-for scene in motion motion-trap crossing-swap occlude-vanish scroll-motion contact-merge launch; do
+for scene in motion motion-trap crossing-swap occlude-vanish scroll-motion contact-merge launch occlude-reverse; do
     sc_c=0; sc_n=0
     seed=$LO
     while [ "$seed" -le "$HI" ]; do

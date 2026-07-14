@@ -523,7 +523,17 @@ per scene region by measured trackability, never granted globally.
       12→6, PoP 13→8. Synthetic `track_test` 100%, `seed_test` 219/220 (== baseline, no regression).
       Association-margin leg surfaced as `am=`; hard-gating deferred to V3.2 candidate sets (hard-gating
       REACQUIRE was tried and rejected — it converts a reacquire into death+rebirth, raising churn).
-- [ ] Seeded occlude-reverse: direction-after-reacquire ≥ 95% on dev seeds, then held-out seeds.
+- [x] Seeded occlude-reverse: direction-after-reacquire ≥ 95% on dev seeds, then held-out seeds.
+      **DONE 2026-07-14** — new `occlude-reverse` scenegen scene (A enters occluder RIGHT, turns while
+      hidden, exits LEFT; `--variant no-reverse` continues right) + `direction_after_reacquire` op in
+      track_probe.py. `seed_test` occlude-reverse **20/20** (10 dev seeds), aggregate 239/240 (99%). The
+      V3.1 mechanism that ships is the **direction RE-SEED on reacquire** (dir/extreme reset to
+      post-reacquire motion), NOT a velocity freeze: freezing position was tried and REJECTED (it broke
+      crossing-swap and pass-through occlusions — a coasting object that CONTINUES through an occluder
+      needs its velocity to keep its identity; only the rare reverse-behind-occluder benefits). The
+      re-seed removed lsl1's 2 REVERSEs — which inspection showed were **fabricated from coasted
+      prediction through an occlusion** (Larry was OCCLUDED at t=7000 and hidden thereafter; the tracker
+      imagined him sweeping left), so this is correct restraint, not harm. go/pharo untouched.
 - [ ] scroll-plus-motion: both motions separated on dev + held-out seeds.
 - [ ] merge-drag trap (the v2 documented failure): candidate sets prevent the silent identity
       steal — the merge emits disputed candidates instead of a confident wrong track.

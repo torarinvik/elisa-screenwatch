@@ -164,6 +164,19 @@ global mutable OV_BXV: i32 = 440
 global mutable OV_BLX: i32 = 250
 global mutable OV_BLW: i32 = 120
 
+# occlude-reverse (V3.1): A enters the occluder moving RIGHT, turns around WHILE HIDDEN, exits LEFT
+# (base) — or continues RIGHT past it (--variant no-reverse). Tests direction-after-reacquire: the
+# turn is unobservable, so the tracker must re-measure direction from post-reacquire motion, not coast
+# the pre-occlusion direction. Occluder [ORBLX, ORBLX+ORBLW] fully hides A across the turn.
+global mutable OR_Y: i32 = 170
+global mutable OR_X0: i32 = 120                 # A start x (left of occluder)
+global mutable OR_XP: i32 = 285                 # A turn/peak x (fully behind occluder, base)
+global mutable OR_XPASS: i32 = 400              # x fully clear of occluder's right edge (no-reverse)
+global mutable OR_XR: i32 = 560                 # A far-right exit x (no-reverse variant)
+global mutable OR_BLX: i32 = 250                # occluder left x
+global mutable OR_BLW: i32 = 110                # occluder width (250..360); A crosses FAST so the
+                                                # hidden/merged gap stays between LOST_MAX and OCC_MAX
+
 # scroll-motion: stripes shift PX px over [T0, T0+LEN]; square X0 -> X0+DX independently
 global mutable SM_T0: i32 = 5000
 global mutable SM_LEN: i32 = 5000
@@ -196,6 +209,7 @@ def setup_scene_params(scene_id: i32, seed: i64) -> void:
     CS_YC <- SG_H / 2 - SQ / 2
     CM_Y <- SG_H / 2 - SQ / 2
     LA_Y <- SG_H / 2 - SQ / 2
+    OR_Y <- SG_H / 2 - SQ / 2
     return if seed < 0
     RNG_S <- (seed + 1).u64()             # nonzero state; distinct seeds -> distinct streams
     w: mutable i32 = 0
@@ -421,6 +435,35 @@ def scene_occlude_vanish(t_ms: i64) -> void:
     # spurious REVERSE on a static object). Unseeded: x 250..370, y 20..160.
     fill_rect(OV_BLX, 20, OV_BLW, 140, 12303291)      # 0x00BBBBBB
 
+# occlude-reverse (V3.1): one square A. It moves RIGHT into a static occluder, and — while fully hidden
+# behind it — turns around and exits moving LEFT (base). With --variant no-reverse it never turns and
+# continues RIGHT past the occluder. The turn is UNOBSERVABLE (hidden), so a tracker that coasts its
+# pre-occlusion direction gets the exit direction wrong; V3.1 re-seeds direction from post-reacquire
+# motion. Hide window is tuned (fully behind while A-left in [ORBLX, ORBLX+ORBLW-SQ]) to exceed LOST_MAX
+# and stay under OCC_MAX so REACQUIRE — not VANISH — wins.
+def scene_occlude_reverse(t_ms: i64) -> void:
+    fill_bg(2105376)
+    tt: i64 = t_ms if t_ms < 20000 else 20000
+    ax: mutable i64 = 0
+    if VAR_NR == 1:
+        # no-reverse: cross the occluder FAST (0->5s, 120->400 clears it), then continue right slowly.
+        if tt < 5000:
+            ax <- OR_X0.i64() + ((OR_XPASS - OR_X0).i64() * tt) / 5000
+        else:
+            ax <- OR_XPASS.i64() + ((OR_XR - OR_XPASS).i64() * (tt - 5000)) / 15000
+    else:
+        # base: fast right BEHIND the occluder (0->4s, 120->285), turn while hidden, fast left back out
+        # (4->8s, 285->120), then rest at the start. The turn itself is never visible.
+        if tt < 4000:
+            ax <- OR_X0.i64() + ((OR_XP - OR_X0).i64() * tt) / 4000
+        else:
+            if tt < 8000:
+                ax <- OR_XP.i64() - ((OR_XP - OR_X0).i64() * (tt - 4000)) / 4000
+            else:
+                ax <- OR_X0.i64()
+    draw_square_at(ax.i32(), OR_Y, 15790320)                            # A
+    fill_rect(OR_BLX, 40, OR_BLW, 260, 12303291)                        # static occluder, drawn LAST
+
 # scroll-vs-motion: the whole background scrolls left (a striped field shifting 2px/frame-ish over
 # t=5-10s) while one square moves right INDEPENDENTLY. The tracker's SHIFT-aware path must report the
 # square's velocity in SCENE coords, not contaminated by the global scroll.
@@ -500,7 +543,10 @@ def render_scene(scene_id: i32, t_ms: i64) -> void:
                                 if scene_id == 8:
                                     scene_launch(t_ms)
                                 else:
-                                    scene_counter(t_ms)
+                                    if scene_id == 9:
+                                        scene_occlude_reverse(t_ms)
+                                    else:
+                                        scene_counter(t_ms)
 
 # ---- seeded gold emission (V1.5): the generator annotates its own fixture ----------------------
 #
@@ -689,6 +735,9 @@ def emit_gold(scene_id: i32, dir: cstr, dur: i64) -> void:
         emit_event(tb8, "e1", "the right square starts moving", "o2")
         emit_event(LA_TC.i64(), "e2", "the left square reaches the right square", "o1")
         emit_fact(tb8, tb8, "launch_before_contact", "yes" if VAR_EL == 1 else "no")
+    if scene_id == 9:
+        emit_event(6000, "e1", "the square turns around while hidden behind the occluder", "o1") if VAR_NR == 0
+        emit_fact(6000, 20000, "direction_after_reacquire", "right" if VAR_NR == 1 else "left")
     gold_write(dir, "truth.jsonl")
 
     # ---- probes.jsonl ----
@@ -714,6 +763,9 @@ def emit_gold(scene_id: i32, dir: cstr, dur: i64) -> void:
     if scene_id == 5:
         emit_probe("so_count", "perception", "count", 0, dur, "How many distinct shapes are on the screen early in the clip? Answer with a single number.", "3", "numeric", 0)
         emit_probe("so_occ", "event", "occluded", 0, dur, "Does a square pass behind another object (become occluded) at any point? Answer yes or no.", "yes", "boolean", ((OV_BLX - SQ - 40).i64() * 20000) / 520)
+    if scene_id == 9:
+        emit_probe("or_occ", "event", "occluded", 0, dur, "Does the square pass behind another object (become occluded) at any point? Answer yes or no.", "yes", "boolean", 3000)
+        emit_probe("or_dir", "perception", "direction_after_reacquire", 4000, dur, "After the square reappears from behind the block, is it moving left or right? Answer left or right.", "right" if VAR_NR == 1 else "left", "substring", 6000)
     if scene_id == 6:
         emit_probe("ss_cont", "event", "continuous", 0, dur, "Is at least one object visible at every moment of the clip? Answer yes or no.", "yes", "boolean", 0)
     if scene_id == 7:
@@ -792,16 +844,16 @@ def main(argc: int, argv: u8&&) -> int:
         _ = printf("scenegen: seed is RESERVED for final scoring (>= 1000); pass --final to run it deliberately\n".cast[u8&])
         return 3
 
-    scene_id: i32 = 0 if sg_streq(scene, "counter") else (1 if sg_streq(scene, "counter-skip") else (2 if sg_streq(scene, "motion") else (3 if sg_streq(scene, "motion-trap") else (4 if sg_streq(scene, "crossing-swap") else (5 if sg_streq(scene, "occlude-vanish") else (6 if sg_streq(scene, "scroll-motion") else (7 if sg_streq(scene, "contact-merge") else (8 if sg_streq(scene, "launch") else -1))))))))
+    scene_id: i32 = 0 if sg_streq(scene, "counter") else (1 if sg_streq(scene, "counter-skip") else (2 if sg_streq(scene, "motion") else (3 if sg_streq(scene, "motion-trap") else (4 if sg_streq(scene, "crossing-swap") else (5 if sg_streq(scene, "occlude-vanish") else (6 if sg_streq(scene, "scroll-motion") else (7 if sg_streq(scene, "contact-merge") else (8 if sg_streq(scene, "launch") else (9 if sg_streq(scene, "occlude-reverse") else -1)))))))))
     if scene_id < 0:
-        _ = printf("scenegen: unknown scene (have: counter, counter-skip, motion, motion-trap, crossing-swap, occlude-vanish, scroll-motion, contact-merge, launch)\n".cast[u8&])
+        _ = printf("scenegen: unknown scene (have: counter, counter-skip, motion, motion-trap, crossing-swap, occlude-vanish, scroll-motion, contact-merge, launch, occlude-reverse)\n".cast[u8&])
         return 2
     # variant compatibility: no-vanish is motion-trap only; no-reverse is motion / motion-trap
     if VAR_NV == 1 and scene_id != 3:
         _ = printf("scenegen: --variant no-vanish applies to motion-trap only\n".cast[u8&])
         return 2
-    if VAR_NR == 1 and scene_id != 2 and scene_id != 3:
-        _ = printf("scenegen: --variant no-reverse applies to motion / motion-trap only\n".cast[u8&])
+    if VAR_NR == 1 and scene_id != 2 and scene_id != 3 and scene_id != 9:
+        _ = printf("scenegen: --variant no-reverse applies to motion / motion-trap / occlude-reverse only\n".cast[u8&])
         return 2
     if VAR_EL == 1 and scene_id != 8:
         _ = printf("scenegen: --variant early-launch applies to launch only\n".cast[u8&])

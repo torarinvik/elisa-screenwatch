@@ -520,6 +520,14 @@ def associate(ncomp: i32, t: i64) -> void:
             TR_XMAX[ti.usize()] <- CM_CX[cj.usize()] if CM_CX[cj.usize()] > TR_XMAX[ti.usize()]
             classify_track(ti, t)                    # leg A: flag UI pointers before any identity claim
             emit_event_c(TR_ID[ti.usize()], "REACQUIRE", t, CM_CX[cj.usize()], CM_CY[cj.usize()], 60, detq(TR_AREA[ti.usize()]), TR_AM[ti.usize()], 60) if was_lost and TR_UIF[ti.usize()] == 0
+            # V3.1 (OC-SORT observation-centric): on reacquire, re-seed direction from the FIRST post-
+            # reacquire motion instead of trusting the pre-occlusion direction coasted through the gap.
+            # Direction is already frozen while unmatched (update_dir runs only on matched frames); this
+            # discards the stale extreme so an object that exits the occluder reversed is measured fresh.
+            if was_lost:
+                TR_DIR[ti.usize()] <- 0
+                TR_STARTX[ti.usize()] <- CM_CX[cj.usize()]
+                TR_EXT[ti.usize()] <- CM_CX[cj.usize()]
             update_dir(ti, CM_CX[cj.usize()], t, CM_CY[cj.usize()])
     # unmatched alive tracks: coast, then end. A track behind a static occluder is OCCLUDED (extended
     # patience, may REACQUIRE); one that disappears in the open field VANISHes after LOST_MAX.

@@ -54,12 +54,15 @@ V3.0 gate deliberately does not force a risky birth/region suppression to move a
 | boxing  | C velocity smear  | 154 → 125   | 26 → **11**| 123 → 123 | 9.1 → 9.1 |
 | cs2     | C velocity smear  | 67 → 48     | 18 → **8** | 144 → 144 | 11.3 → 11.3 |
 
-- **Do-no-harm controls (sub-mode D) fully preserved.** go and lsl1 are byte-for-byte identical on every
-  metric — including lsl1's 2 real REVERSEs (Larry, id=13), which survive because span (35) exceeds the
-  jitter floor even though the sprite is briefly LOST mid-sweep. This was the load-bearing design pivot:
-  an earlier committed-direction excursion metric wrongly flagged Larry, and a lifetime-mean-speed leg
-  wrongly flagged his post-pause reverse — both were rejected in favor of the direction-agnostic,
-  LOST-gap-robust travel *span*.
+- **Do-no-harm controls (sub-mode D) fully preserved by the V3.0 gate.** go and lsl1 are byte-for-byte
+  identical on every metric under the gate alone — lsl1 keeps its 2 REVERSEs (they are not tiny-chrome,
+  not smear, and span 35 exceeds the jitter floor). This was the load-bearing design pivot: an earlier
+  committed-direction excursion metric wrongly flagged Larry, and a lifetime-mean-speed leg wrongly
+  flagged his post-pause reverse — both rejected for the direction-agnostic, LOST-gap-robust travel
+  *span*. **Correction (V3.1, below):** closer inspection showed those 2 lsl1 REVERSEs were themselves
+  fabricated — from coasted prediction while Larry was OCCLUDED and hidden — so V3.1's direction re-seed
+  correctly removes them. The V3.0 gate leaving them is accurate (they aren't its sub-modes); V3.1 is
+  the leg that catches cross-occlusion fabrication.
 - **No collateral churn.** Track count and churn are unchanged on every non-target fixture — the earlier
   one-strike "permanently reclassify the whole track UI" design caused die-and-rebirth churn on
   boxing/police/cs2; separating "chrome region ⇒ not an object" (permanent) from "this reverse is a

@@ -105,6 +105,26 @@ def answer(op, probe, frames, tracks, events):
         net = pts[-1][1] - pts[0][1]
         return "right" if net > 0 else ("left" if net < 0 else "")
 
+    if op == "direction_after_reacquire":
+        # V3.1/V3.2: after the object reappears from behind an occluder, which way is it moving? Prefer a
+        # tracker REACQUIRE (same id kept across a short occlusion); else fall back to the last APPEAR —
+        # the re-emergence born as a NEW track, which the ledger pairs as a REACQUIRE_CANDIDATE (V2). In
+        # both cases follow that track's OWN id (the occluder is a separate static track — don't average).
+        reacq = [e for e in events if e[1] == "REACQUIRE"]
+        if reacq:
+            rid, rt = reacq[0][0], reacq[0][2]
+        else:
+            apps = [e for e in events if e[1] == "APPEAR"]
+            if not apps:
+                return ""
+            rid, rt = apps[-1][0], apps[-1][2]
+        pts = [(t, cx) for t, rows in sorted(tracks.items()) if t >= rt
+               for (tid, cx, cy, d, st) in rows if tid == rid]
+        if len(pts) < 2:
+            return ""
+        net = pts[-1][1] - pts[0][1]
+        return "right" if net > 0 else ("left" if net < 0 else "")
+
     if op == "reversal":
         return "yes" if any(e[1] == "REVERSE" for e in events) else "no"
 
