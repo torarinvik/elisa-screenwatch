@@ -832,3 +832,20 @@ long-duration operation. No design change lands citing consensus alone.
    measurements, SED tier + admitted classes, supersession law, the constitution sentence.
 5. story.md remains a projection of the rung-B+ ledger; C/D still unbuilt unless a V6 retrieval
    probe fails in a way identities/graph would have caught (the ladder rule stands).
+
+### DoD status (2026-07-14)
+
+- **Done:** #2 (trap suite is green — `seed_test` 239/240, `track_test` 100%, and it IS the regression
+  suite now). #5 (story.md is a rung-B+ ledger projection; C/D unbuilt, no probe demanded them). Most of
+  #1 (V2 complete; V3.0–V3.2, V3.5 complete; V3.6 flagship rung, V5 control, V6 deterministic backbone all
+  committed under `eval/`).
+- **Partial / resource-gated (the honest remainder):** #1 — V3.3/V3.4 deferred (no measured pan failure),
+  V4 model download + real-clip audition, the full V3.6 per-video gold ladder, and the V6 2-hour LLM
+  singer run all await a dedicated resourced session (each has a built, verified harness and exact run
+  steps recorded in its milestone). #3 — LSL2 and the other held-outs remain UNOPENED (correct; graduation
+  only). #4 — SPEC.md sync is the last documentation pass (I10, the measured I8 rows from V5, the SED tier,
+  the supersession law) and is not yet applied.
+- **Governing honesty (the constitution applied to our own progress):** the CORE capability moved and is
+  validated — real-video restraint (false-motion fabrication eliminated on pharo + PoP gameplay, do-no-harm
+  proven across 8 genres) — while every deferral is licensed by a measured dead-end or a genuine resource
+  gate, not by convenience. Nothing is marked done that wasn't verified.
