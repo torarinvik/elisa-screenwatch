@@ -480,6 +480,18 @@ def contested_by(cx: i32, cy: i32, self_ti: i32) -> i32:
         TR_ID[oj.usize()] return if dx * dx + dy * dy <= g * g
     return 0
 
+# V3.5: a single derived TRACKABILITY score (0-100) for the per-track snapshot — how much a physical-
+# object claim about this track is licensed. Combines persistence (matched life), detection quality
+# (area), and the applicability verdict (a UI-classified region floors it). This is the headline field
+# the confidence decomposition rolls up to; per-stage dq/am/ec ship on events (V3.0). Calibration
+# (claimed trk vs measured accuracy per bucket) is produced by the V3.6 gold ladder, not asserted here.
+def trackability(ti: i32) -> i32:
+    5 return if TR_UIF[ti.usize()] == 1
+    life: i32 = TR_LIFE[ti.usize()]
+    persist: i32 = 55 if life >= 8 else (30 if life >= 3 else 10)
+    v: i32 = persist + detq(TR_AREA[ti.usize()]) / 3
+    return 95 if v > 95 else v
+
 # Is track ti's predicted box overlapping some OTHER matched, (near-)stationary, >=-as-large track?
 # That is the symbolic signature of occlusion (something passed behind a static object) as opposed to
 # a genuine open-field disappearance — an INFERENCE, hence the OCCLUDED event carries lower conf.
@@ -614,6 +626,8 @@ def associate(ncomp: i32, t: i64) -> void:
         ob_str("A") if TR_STATE[ti.usize()] == 0
         ob_str(" conf=")
         ob_dec((60 if TR_STATE[ti.usize()] == 1 else 90).i64())
+        ob_str(" trk=")
+        ob_dec(trackability(ti).i64())
         ob_byte(10)
         ob_flush()
 

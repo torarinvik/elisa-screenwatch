@@ -469,6 +469,15 @@ per scene region by measured trackability, never granted globally.
 
 ### V3.3 Two-dimensional global translation (generalize `SHIFT`)
 
+- **DEFERRED with a trigger (2026-07-14).** The 8-video restraint census surfaced FOUR failure
+  sub-modes (UI pointer, association churn, velocity smear, calm) and **no uncorrected-pan sub-mode** —
+  no real fixture in scope fails from horizontal/diagonal global translation. The encoder's delta is
+  row-oriented (vertical `SHIFT dy` matches whole rows); horizontal shift breaks row-matching, so 2-D
+  translation is a deep delta-representation rewrite with a real bit-exact-reconstruction risk. By the
+  same earn-your-complexity rule the plan applies to affine and point-tracking, integer 2-D translation
+  now waits on its trigger: **a measured R1/R2 fixture whose churn or mis-segmentation is attributable
+  to an uncorrected horizontal/diagonal pan** (the four seeded scroll scenes are the scaffolding to
+  confirm the fix once a real failure licenses it). Redirected the effort to V3.5 + the V3.6 real ladder.
 - Encoder currently detects vertical `SHIFT dy=`. Add horizontal: `SHIFT dx= dy=` (integer grid
   cells, detected by the same row/column-match scan transposed). Format bump is additive —
   `dy`-only lines remain valid; tracker parses both.
@@ -490,6 +499,10 @@ per scene region by measured trackability, never granted globally.
 
 ### V3.4 Residual segmentation (simultaneous global + local motion)
 
+- **DEFERRED with V3.3** (it consumes V3.3's compensated grid). Note the EXISTING vertical
+  `scroll-motion` seeded scene already passes at **10/10** in `seed_test` — the vertical-scroll +
+  independent-object case is handled by the current encoder+tracker; the outstanding work is only the
+  HORIZONTAL/2-D residual, which is gated on the V3.3 trigger above.
 - After compensating the detected translation, run component extraction on the residual grid so
   an object moving DURING a scroll is still tracked. New seeded scene: `scroll-plus-motion`
   (background scrolls dy=2/frame while a square moves horizontally). Currently conflated;
@@ -502,6 +515,14 @@ per scene region by measured trackability, never granted globally.
   number. These feed the V1.8 calibration report — measured, not asserted.
 - The minimal 3-field split ships in V3.0; this milestone completes the decomposition
   (adds `trackability`, `identity_confidence`, `motion_measurement_quality`) and calibrates it.
+- **DONE (2026-07-14, headline field).** The INF track line now carries `trk=` — a derived
+  TRACKABILITY score (0-100) rolling up persistence (matched life), detection quality (area), and the
+  applicability verdict (a UI-classified region floors it to 5). On pharo it separates cleanly: 5 for
+  UI-classified regions, 23-43 for tiny/short-lived, 68-83 for persistent real regions. `dq/am/ec` per
+  stage already ship on events (V3.0). CALIBRATION (claimed `trk` vs measured accuracy per bucket, the
+  V1.8 reliability diagram) is produced from the V3.6 gold ladder — it needs gold-scored runs, so it is
+  measured there rather than asserted here. `identity_confidence`/`motion_measurement_quality` fold into
+  `am`/`ec` for now; they split out only if a V3.6 probe rewards the finer granularity.
 
 ### V3.5b Typed Perceive-Parse-Verify (claim verification as a tool interface)
 
@@ -558,7 +579,9 @@ per scene region by measured trackability, never granted globally.
       re-seed removed lsl1's 2 REVERSEs — which inspection showed were **fabricated from coasted
       prediction through an occlusion** (Larry was OCCLUDED at t=7000 and hidden thereafter; the tracker
       imagined him sweeping left), so this is correct restraint, not harm. go/pharo untouched.
-- [ ] scroll-plus-motion: both motions separated on dev + held-out seeds.
+- [~] scroll-plus-motion: both motions separated on dev + held-out seeds. **PARTIAL** — the VERTICAL
+      case (`scroll-motion` seeded scene) passes 10/10 in seed_test today; the HORIZONTAL/2-D residual is
+      deferred with V3.3/V3.4 (no real-video pan failure measured to license the encoder rewrite).
 - [x] merge-drag trap (the v2 documented failure): candidate sets prevent the silent identity
       steal — the merge emits disputed candidates instead of a confident wrong track.
       **DONE 2026-07-14** — the tracker emits `INF dispute id=.. contests=..` when a reacquired blob is
