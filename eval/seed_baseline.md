@@ -233,3 +233,28 @@ Net: for this model **pixels >> vector-text >> ASCII**. Text renderings do not r
 because the bottleneck was never the pixels' fidelity — it is the model reading non-natural text and
 reasoning semantically over faithful text. The orchestra keeps the VLM on IN-DISTRIBUTION natural
 frames (where it is useful) and never as a motion/event authority on synthetic geometry.
+
+### Reader vs. representation — the same text handed to a capable model
+
+The above conclusions are about the 3B READER. To separate reader from representation, the SAME
+ASCII and vector text (no image, blind) were handed to a full Claude agent:
+
+| rendering | tokens | Qwen-3B reader | Claude-agent reader (blind, text only) |
+|---|---|---|---|
+| ASCII (80/120/160-wide) | 471 / 952 / 1437 | hallucinates a gun scene / a serene landscape | "three round face-like objects in a row, highlight + two eye-spots each" — correct gross structure, no hallucination, honest low-med confidence |
+| **vector / color regions** | **457** | flat: "a color segmentation task" | "three figures in a row: blue shell + white face-panel + a tan bar growing 86->203->250, anchored left, protruding rightward -> a motion/progression sequence" |
+
+The vector agent reconstructed the PUNCHLINE from pure geometry — the monotonic tan-bar growth as
+"the deliberate point of the composition" — which even the pixel-fed 3B missed (it thought only the
+rightmost figure had a nose). It missed the letter "C", the cartoon faces, and the "lie" metaphor,
+but got the structure and the progression. It read the GLOBAL composition better than the pixel 3B;
+the 3B had richer local semantics (faces, "C", arrows) but misread the structure.
+
+**The correction this forces:** the representation was never the bottleneck — the READER was. The
+exact vector text the 3B dismissed let a capable model rebuild the three-figure layout AND the
+growing-protrusion progression, at ~457 tokens (~2 frames' worth of 448px vision budget). Two things
+held across both readers: **vector > ASCII** (ASCII loses the progression; it is also the only thing
+that made the 3B hallucinate outright), and the V1.9/V1.10 zeros are a statement about THAT MODEL,
+not about the text-representation channel. Design fork for V5: a vector-region text channel is a
+viable, cheap, evidence-grounded violin input IF the reader is capable enough — which points at an
+API-class model for the violin's semantic role, not the local 3B.
