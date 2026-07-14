@@ -1,0 +1,11 @@
+#!/bin/sh
+# screenvlm_text — shim that runs screenvlm_text.py in the pinned VLM venv (the R2/R3 rungs of the
+# representation ladder). Same provisioning as ./screenvlm; LADDER_REPR=table|svg selects the rep.
+HERE=$(cd "$(dirname "$0")" && pwd)
+PY="$HERE/.venv-vlm/bin/python"
+[ -x "$PY" ] || PY="$SCREENVLM_PYTHON"
+[ -n "$PY" ] && [ -x "$PY" ] || {
+    echo "screenvlm_text: no venv — run ./setup_vlm.sh (or set SCREENVLM_PYTHON to a venv python)" >&2
+    exit 2
+}
+exec "$PY" "$HERE/screenvlm_text.py" "$@"

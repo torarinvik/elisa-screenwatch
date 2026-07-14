@@ -143,3 +143,93 @@ does not rescue it. (Open-ended probes fare no better: `pm_count` gold 1 → "2"
 → "left" — the downscaled synthetic scenes are out-of-distribution for the 3B model.) The takeaway
 for the orchestra: the VLM cannot be trusted as a motion/event authority on these inputs; the
 symbolic members remain the authority, and V5 (VLM cross-exam) inherits this as its "before" line.
+
+## Representation-ladder acceptance (V1.10) — 2026-07-14
+
+Runner: `eval/meta_ladder.sh`. V1.9 proved (32f control) the raster 0/15 is the vision encoder, not
+frame count. V1.10 tests the complementary lever: spend the context budget on MANY frames at LOW
+detail-per-frame — the scene handed to the LLM's **language** pathway as a TEXT bounding-box log
+(`screenvlm_text.py`, rungs `table:N` / `svg:N`) instead of pixels to the vision encoder. The boxes
+come from an **independent** per-frame threshold + connected-components pass (`extract_blobs`): no
+tracker, no track ids, no direction/event computation. A correct answer would therefore be genuine
+reasoning over evidence, not a paraphrase of viola — so this rung *could* have earned real authority.
+
+The representation is provably faithful. For motion base seed 0 the log reads cx 561→116 (t=0..7800)
+then 116→557 (t=8700..19900) — the reversal, its zone (left), and the turnaround time are all right
+there in the numbers; the extractor never labels them.
+
+**Result — every rung 0, same prior.** Metamorphic pair credit (correct on BOTH sides), seed 0:
+
+| rung | repr / frames | ladder_sensitivity |
+|---|---|---|
+| table:8  | box log, 8 frames  | 0/5 |
+| table:24 | box log, 24 frames | 0/5 |
+| svg:12   | per-frame SVG, 12  | 0/5 |
+
+Every answer is the same constant **"No."** the raster violin gave — the text pathway leaks the
+identical prior. The strongest rung run to full parity with V1.9 (`eval/meta_ladder.sh 0 2 "table:8"`,
+3 seeds × 4 pairs) scores **0/15** — the same number as the raster violin, flip probe for flip probe.
+
+**The mechanism — a prior, and it confabulates agreement with the question.** A/B on motion seed 0
+(base reverses = gold yes; variant monotonic = gold no), `table:8`:
+
+| question phrasing | base | variant |
+|---|---|---|
+| neutral ("does the square reverse its direction of motion?") | No | No |
+| log-pointing, not leading ("using the cx values, does it reverse horizontal direction?") | No | No |
+| spoon-fed ("does cx decrease and then increase?") | **Yes** | **Yes** |
+
+The neutral and even the log-pointing phrasings return the constant "No" prior. The spoon-fed
+phrasing returns "Yes" — **on both sides**, including the monotonic variant whose cx only ever
+increases. So the model never consults the numbers to check the premise; it echoes whatever the
+question presupposes. A separate read-comprehension probe confirms the shape: asked for cx at the
+first line / its minimum / the last line, the model reports the endpoints correctly (561, 557) but
+gives the minimum as row 2's value (510, true min 116) and calls the V-shape "generally decreasing"
+— it does local lookups but cannot do the global aggregation (find-min, detect-a-reversal,
+verify-a-premise) the event probes require.
+
+**Methodology note kept on the record so it isn't relearned.** An early hand-diagnostic with the
+spoon-fed phrasing returned "Yes" on the base and was briefly mistaken for the rung working. It was
+a *leading prompt* — the same phrasing says "Yes" to the no-reversal variant too. Only the neutral
+probe under pair credit is a valid measurement; it caught the error. Rule: **never score the violin
+on a phrasing that names the answer's mechanism** — that is the harness reasoning, not the model.
+
+**Takeaway.** No rung of the representation ladder earns the violin any temporal authority on these
+inputs. The bottleneck is not representation fidelity (the reversal is explicit in the log) but the
+3B model's inability to reason over multi-row evidence and its habit of agreeing with the question's
+premise. The ladder idea was worth measuring and is now measured: authority stays with the symbolic
+members. V5 (VLM cross-exam) inherits BOTH "before" lines — raster 0/15 (V1.9) and text-log 0 (V1.10).
+
+### Real-image cross-check — the control that corrects the narrative
+
+To check whether "the VLM can't see" over-generalized from the synthetic scenes, the same three
+representations were run on ONE natural illustration (three blue hexagonal "C" characters with
+cartoon faces and a wooden Pinocchio nose growing left->right, with progression arrows — a "growing
+lie"). One Qwen load, four conditions (scratch script, not committed):
+
+| representation | model's description | verdict |
+|---|---|---|
+| **pixels** (448px, vision) | "three blue hexagonal characters with the letter C... a wooden stick being inserted into the nose... arrows pointing left to middle to right, indicating a sequence" | **essentially correct** (missed only the "lie" metaphor) |
+| **ASCII 64-wide** (text) | "a person holding a gun, aiming at another person on the ground" | hallucination |
+| **ASCII 110-wide** (text) | "a landscape with a mountain range... a river... peaceful and serene" | hallucination (and disagrees with the 64-wide one) |
+| **vector / color regions** (text) | correctly restates "11 blue... 6 white... 3 wood-tan regions... a color segmentation task" | faithful readout, ZERO semantic inference |
+
+Three corrections to the record:
+
+1. **The 3B VLM is NOT globally blind.** On a real, in-distribution image it describes the scene
+   accurately. The V1.9 raster 0/15 is specifically the DOWNSCALED SYNTHETIC scenes being
+   out-of-distribution pixels — not a general perception failure. Do not cite V1.9 as "the VLM can't
+   see"; cite it as "the VLM can't see OUR synthetic rasters."
+2. **ASCII rendering is worse than useless.** It induces confident, unrelated hallucinations (a gun
+   scene; a serene landscape) that don't even agree across resolutions — the model isn't reading the
+   ASCII, it pattern-matches "ASCII-art-of-a-scene" and confabulates. Turning pixels into ASCII
+   DESTROYS information for this model.
+3. **Vector text is read but not interpreted.** The extractor captured the punchline with no
+   semantics — three tan bars of increasing width (86 -> 203 -> 250) — but the model never connects
+   that to noses/faces/a lie; it just re-lists the regions. Same V1.10 signature: local readout yes,
+   semantic/global inference no.
+
+Net: for this model **pixels >> vector-text >> ASCII**. Text renderings do not rescue perception,
+because the bottleneck was never the pixels' fidelity — it is the model reading non-natural text and
+reasoning semantically over faithful text. The orchestra keeps the VLM on IN-DISTRIBUTION natural
+frames (where it is useful) and never as a motion/event authority on synthetic geometry.
