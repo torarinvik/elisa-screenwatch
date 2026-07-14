@@ -65,3 +65,13 @@ three, matched to three measurable signatures, plus a control class the gate mus
 - 20 s single-offset clips are indicative, not exhaustive; a different offset could shift the mix.
 - go's calm may partly reflect a static commentary layout, not tracker virtue alone — still a valid
   do-no-harm control either way.
+
+## After — the V3.0 gate built on this evidence (2026-07-14)
+
+The multi-leg gate designed from these 4 sub-modes was implemented and re-censused; full before/after in
+`v30_gate_acceptance.md`. Headline: REVERSE/implausible-reverse claims fell on every affected sub-mode
+(A pharo 5→0, C boxing revHiVx 26→11 / cs2 18→8, B police 12→6 / PoP 13→8) while the sub-mode D controls
+(go, lsl1) stayed **byte-for-byte identical** and every fixture's track count and churn were preserved.
+The census was the guard the plan demanded: a pharo-only gate would have addressed only sub-mode A and
+risked harming D — building each leg against its isolating signature, then re-running this census as the
+acceptance, is what proved the gate generalizes without collateral damage.

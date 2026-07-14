@@ -36,6 +36,15 @@ global MOVE_MIN: i32 = 4         # displacement (cells) to first commit a direct
 global REV_HYST: i32 = 10        # pullback (cells) to confirm a REVERSE — above occluder merge-drag,
                                  # well below a real reversal's pullback (whole-field sweeps)
 
+# ---- V3.0 trackability gate tunables (calibrated on the restraint census, 2026-07-14) ----
+global AREA_TINY_SC: i32 = 30    # scene-relative area floor: cursor/text-fragment scale (census)
+global BAR_WPCT: i32 = 85        # a component spanning >= this % of grid width is static chrome (bar)
+global VX_IMPL: i32 = 35         # implausible per-frame speed (cells/frame) — smear, not a real object
+global CHR_MINLIFE: i32 = 3      # a UI-pointer verdict needs at least this many matched frames
+global SPD_MINLIFE: i32 = 8      # static-furniture verdict needs at least this many matched frames
+global REV_MIN_EXC: i32 = 20     # a TINY track reversing over a smaller excursion is UI jitter/flicker,
+                                 # not a physical sweep (pharo id=57 caret); real sprites sweep further
+
 # ---- file buffer + cursor ----
 global mutable FBUF: array[u8, 4194304] = zeroed
 global mutable flen: i64 = 0
@@ -75,7 +84,18 @@ global mutable TR_MATCHED: array[u8, 64] = zeroed
 global mutable TR_HW: array[i32, 64] = zeroed      # bbox half-width (cells), last matched
 global mutable TR_HH: array[i32, 64] = zeroed      # bbox half-height (cells), last matched
 global mutable TR_OCC: array[u8, 64] = zeroed      # 1 while believed occluded (extended patience)
+# ---- V3.0 per-track trackability accumulators ----
+global mutable TR_LIFE: array[i32, 64] = zeroed    # matched frames (denominator for the gate ratios)
+global mutable TR_CHR: array[i32, 64] = zeroed     # matched frames spent tiny in a chrome-dominated scene
+global mutable TR_SPD: array[i32, 64] = zeroed     # sum of |vx|+|vy| over matched frames (mean-speed num.)
+global mutable TR_AM: array[i32, 64] = zeroed      # last association margin (2nd-best - best gate dist), capped
+global mutable TR_UIF: array[u8, 64] = zeroed      # 1 once an UNTRACKABLE/UI_CHANGE verdict was emitted
+global mutable TR_XMIN: array[i32, 64] = zeroed    # min matched centroid x over life (travel span, lo)
+global mutable TR_XMAX: array[i32, 64] = zeroed    # max matched centroid x over life (travel span, hi)
 global mutable next_id: i32 = 1
+
+# per-frame scene classification (set in process_frame, read by the gate)
+global mutable g_chrome: bool = false              # >=1 full-width static bar and <=1 non-bar mover
 
 # grid dims for the batch currently being parsed
 global mutable g_dw: i32 = 0
@@ -264,7 +284,12 @@ def label_components(dw: i32, dh: i32, bg: u8) -> i32:
     return ncomp
 
 # ---- events (all INF) ----
-def emit_event(id: i32, kind: cstr, t: i64, cx: i32, cy: i32, conf: i32) -> void:
+# V3.0: every event carries the 3-field confidence split alongside the legacy blended conf=:
+#   dq = detection_quality (component area/stability), am = association_margin (2nd-best - best gate
+#   distance; -1 = n/a e.g. a birth), ec = event_confidence (the interpretation's own confidence).
+# conf= is kept == ec for ledger.py compatibility; the split lets a claim distinguish "detection
+# certain, association meaningless" from "detection weak" — one scalar cannot.
+def emit_event_c(id: i32, kind: cstr, t: i64, cx: i32, cy: i32, conf: i32, dq: i32, am: i32, ec: i32) -> void:
     ob_str("INF event id=")
     ob_dec(id.i64())
     ob_str(" kind=")
@@ -277,8 +302,84 @@ def emit_event(id: i32, kind: cstr, t: i64, cx: i32, cy: i32, conf: i32) -> void
     ob_dec(cy.i64())
     ob_str(" conf=")
     ob_dec(conf.i64())
+    ob_str(" dq=")
+    ob_dec(dq.i64())
+    ob_str(" am=")
+    ob_dec(am.i64())
+    ob_str(" ec=")
+    ob_dec(ec.i64())
     ob_byte(10)
     ob_flush()
+
+# detection_quality proxy: tiny/low-area components are low-quality detections.
+def detq(area: i32) -> i32:
+    return 40 if area < AREA_TINY_SC else 85
+
+# legacy-signature shim: events with no measured association margin (births, open-field vanishes).
+def emit_event(id: i32, kind: cstr, t: i64, cx: i32, cy: i32, conf: i32) -> void:
+    emit_event_c(id, kind, t, cx, cy, conf, detq(0), -1, conf)
+
+# V3.0 restraint verdict: instead of a physical-motion claim, record that the region changed but is
+# NOT a trackable persistent object. OBSERVED changed-regions stay (the comps were already emitted);
+# this is the INFERRED activity classification that replaces the suppressed claim.
+def emit_activity(id: i32, t: i64, cx: i32, cy: i32, reason: cstr) -> void:
+    ob_str("INF activity id=")
+    ob_dec(id.i64())
+    ob_str(" t=")
+    ob_dec(t)
+    ob_str(" activity_type=UI_CHANGE trackability=LOW cx=")
+    ob_dec(cx.i64())
+    ob_str(" cy=")
+    ob_dec(cy.i64())
+    ob_str(" reason=")
+    ob_str(reason)
+    ob_byte(10)
+    ob_flush()
+
+# V3.0 trackability gate: is a REVERSE on track ti a licensed physical-motion claim? Returns true to
+# emit it; false to SUPPRESS it (recording a one-time UNTRACKABLE/UI_CHANGE verdict instead). Legs:
+#   A applicability — a TINY track that spent the majority of its life as the sole mover over
+#     full-frame static chrome is a UI pointer (the pharo cursor); reason=ui-pointer.
+#   B bounded velocity — |vx| >= VX_IMPL is a smear, not a real reversal (boxing/cs2); reason=velocity-smear.
+#   C jitter/flicker — a TINY track whose whole-life travel SPAN (max-min matched centroid x) is
+#     smaller than REV_MIN_EXC is a UI redraw/caret wobble, not a physical sweep (pharo id=57, area=4,
+#     ~15px wobble); reason=ui-jitter. Span is direction-agnostic and survives LOST/coasting gaps, so a
+#     real sprite that sweeps out-and-back while briefly lost (lsl1 Larry, span 35) is NOT flagged, and
+#     a mover that PAUSES for a long stretch then reverses is not mistaken for furniture (the reason a
+#     lifetime-mean-speed leg was rejected: it flagged Larry's late reverse after he stood still).
+# A genuine mover (go has no reverses; PoP/lsl1 sprites are not tiny, sweep far, are below the velocity
+# ceiling) passes every leg — the do-no-harm guarantee on sub-mode D.
+# Two distinct decisions, deliberately NOT conflated:
+#  - a chrome UI region (TR_UIF set by classify_track) is not an object at all: NO motion claim, and its
+#    identity churn is suppressed elsewhere. Early-out here.
+#  - a per-event smear/jitter suppresses only THIS reverse (a real object can throw one implausible
+#    reversal from a smear or a lost-then-reacquired jump); it does NOT permanently reclassify the track,
+#    so the object keeps its identity and later legitimate reversals still fire. This avoids the
+#    die-and-rebirth churn that one-strike reclassification caused on boxing/police/cs2.
+def reverse_licensed(ti: i32, t: i64, cx: i32, cy: i32) -> bool:
+    false return if TR_UIF[ti.usize()] == 1        # chrome UI region — no motion claims at all
+    vx: i32 = TR_VX[ti.usize()]
+    tiny: bool = TR_AREA[ti.usize()] < AREA_TINY_SC
+    span: i32 = TR_XMAX[ti.usize()] - TR_XMIN[ti.usize()]     # total travel extent over life (dir-agnostic)
+    smear: bool = vx >= VX_IMPL or vx <= (0 - VX_IMPL)
+    jitter: bool = tiny and span < REV_MIN_EXC
+    if smear or jitter:
+        reason: cstr = "velocity-smear" if smear else "ui-jitter"
+        emit_activity(TR_ID[ti.usize()], t, cx, cy, reason)
+        return false
+    return true
+
+# V3.0 proactive applicability classification (leg A): a TINY track that has spent the majority of its
+# matched life as the sole mover over full-frame static chrome IS a UI pointer — classify it UNTRACKABLE
+# up front (not only when it happens to reverse), so its later object-identity churn (VANISH/REACQUIRE/
+# OCCLUDED — an untrackable thing has no identity to lose or regain) is suppressed too. Harm-free: go
+# (no bars → never chrome) and real sprites (not tiny) never satisfy the condition.
+def classify_track(ti: i32, t: i64) -> void:
+    return if TR_UIF[ti.usize()] == 1
+    tiny: bool = TR_AREA[ti.usize()] < AREA_TINY_SC
+    if tiny and TR_LIFE[ti.usize()] >= CHR_MINLIFE and TR_CHR[ti.usize()] * 2 >= TR_LIFE[ti.usize()]:
+        emit_activity(TR_ID[ti.usize()], t, TR_CX[ti.usize()], TR_CY[ti.usize()], "ui-pointer")
+        TR_UIF[ti.usize()] <- 1
 
 # peak-detection with hysteresis: commit a direction after MOVE_MIN, flip it (REVERSE) only after
 # the centroid pulls REV_HYST back from the extreme — the Wolf3D axis-hysteresis lesson.
@@ -298,7 +399,8 @@ def update_dir(ti: i32, cx: i32, t: i64, cy: i32) -> void:
                 TR_EXT[ti.usize()] <- cx
             else:
                 if TR_EXT[ti.usize()] - cx >= REV_HYST:
-                    emit_event(TR_ID[ti.usize()], "REVERSE", t, TR_EXT[ti.usize()], cy, 85)
+                    if reverse_licensed(ti, t, TR_EXT[ti.usize()], cy):
+                        emit_event_c(TR_ID[ti.usize()], "REVERSE", t, TR_EXT[ti.usize()], cy, 85, detq(TR_AREA[ti.usize()]), TR_AM[ti.usize()], 85)
                     TR_DIR[ti.usize()] <- -1
                     TR_EXT[ti.usize()] <- cx
         else:
@@ -306,7 +408,8 @@ def update_dir(ti: i32, cx: i32, t: i64, cy: i32) -> void:
                 TR_EXT[ti.usize()] <- cx
             else:
                 if cx - TR_EXT[ti.usize()] >= REV_HYST:
-                    emit_event(TR_ID[ti.usize()], "REVERSE", t, TR_EXT[ti.usize()], cy, 85)
+                    if reverse_licensed(ti, t, TR_EXT[ti.usize()], cy):
+                        emit_event_c(TR_ID[ti.usize()], "REVERSE", t, TR_EXT[ti.usize()], cy, 85, detq(TR_AREA[ti.usize()]), TR_AM[ti.usize()], 85)
                     TR_DIR[ti.usize()] <- 1
                     TR_EXT[ti.usize()] <- cx
 
@@ -334,6 +437,13 @@ def new_track(cj: i32, t: i64) -> void:
     TR_HW[ti.usize()] <- (CM_MAXX[cj.usize()] - CM_MINX[cj.usize()]) / 2
     TR_HH[ti.usize()] <- (CM_MAXY[cj.usize()] - CM_MINY[cj.usize()]) / 2
     TR_OCC[ti.usize()] <- 0
+    TR_LIFE[ti.usize()] <- 0
+    TR_CHR[ti.usize()] <- 0
+    TR_SPD[ti.usize()] <- 0
+    TR_AM[ti.usize()] <- -1
+    TR_UIF[ti.usize()] <- 0
+    TR_XMIN[ti.usize()] <- CM_CX[cj.usize()]
+    TR_XMAX[ti.usize()] <- CM_CX[cj.usize()]
     emit_event(id, "APPEAR", t, CM_CX[cj.usize()], CM_CY[cj.usize()], 90)
 
 # absolute value helper
@@ -369,6 +479,7 @@ def associate(ncomp: i32, t: i64) -> void:
         gate: i32 = GATE_BASE + 2 * (iabs(TR_VX[ti.usize()]) + iabs(TR_VY[ti.usize()]))
         best: mutable i32 = -1
         bestd: mutable i32 = gate * gate + 1
+        bestd2: mutable i32 = gate * gate + 1            # second-best gated distance (association margin)
         for cj in 0..<ncomp:
             continue if CM_USED[cj.usize()] != 0
             dx: i32 = CM_CX[cj.usize()] - px
@@ -376,8 +487,12 @@ def associate(ncomp: i32, t: i64) -> void:
             d2: i32 = dx * dx + dy * dy
             ar_ok: bool = CM_AREA[cj.usize()] * 2 >= TR_AREA[ti.usize()] and TR_AREA[ti.usize()] * 2 >= CM_AREA[cj.usize()]
             if ar_ok and d2 < bestd:
+                bestd2 <- bestd
                 bestd <- d2
                 best <- cj
+            else:
+                if ar_ok and d2 < bestd2:
+                    bestd2 <- d2
         if best >= 0:
             cj: i32 = best
             CM_USED[cj.usize()] <- 1
@@ -395,25 +510,46 @@ def associate(ncomp: i32, t: i64) -> void:
             TR_STATE[ti.usize()] <- 0
             TR_LOST[ti.usize()] <- 0
             TR_OCC[ti.usize()] <- 0
-            emit_event(TR_ID[ti.usize()], "REACQUIRE", t, CM_CX[cj.usize()], CM_CY[cj.usize()], 60) if was_lost
+            # V3.0 accumulators (BEFORE update_dir, so the gate reads this frame's values)
+            margin: i32 = bestd2 - bestd
+            TR_AM[ti.usize()] <- margin if margin < 999 else 999
+            TR_LIFE[ti.usize()] <- TR_LIFE[ti.usize()] + 1
+            TR_SPD[ti.usize()] <- TR_SPD[ti.usize()] + iabs(nvx) + iabs(nvy)
+            TR_CHR[ti.usize()] <- TR_CHR[ti.usize()] + 1 if g_chrome and CM_AREA[cj.usize()] < AREA_TINY_SC
+            TR_XMIN[ti.usize()] <- CM_CX[cj.usize()] if CM_CX[cj.usize()] < TR_XMIN[ti.usize()]
+            TR_XMAX[ti.usize()] <- CM_CX[cj.usize()] if CM_CX[cj.usize()] > TR_XMAX[ti.usize()]
+            classify_track(ti, t)                    # leg A: flag UI pointers before any identity claim
+            emit_event_c(TR_ID[ti.usize()], "REACQUIRE", t, CM_CX[cj.usize()], CM_CY[cj.usize()], 60, detq(TR_AREA[ti.usize()]), TR_AM[ti.usize()], 60) if was_lost and TR_UIF[ti.usize()] == 0
             update_dir(ti, CM_CX[cj.usize()], t, CM_CY[cj.usize()])
     # unmatched alive tracks: coast, then end. A track behind a static occluder is OCCLUDED (extended
     # patience, may REACQUIRE); one that disappears in the open field VANISHes after LOST_MAX.
     for ti in 0..<MAX_TRACKS:
         continue if TR_ALIVE[ti.usize()] == 0
         continue if TR_MATCHED[ti.usize()] != 0
-        if TR_OCC[ti.usize()] == 0 and occluder_overlap(ti):
-            TR_OCC[ti.usize()] <- 1
-            emit_event(TR_ID[ti.usize()], "OCCLUDED", t, TR_CX[ti.usize()], TR_CY[ti.usize()], 55)
-        TR_LOST[ti.usize()] <- TR_LOST[ti.usize()] + 1
-        budget: i32 = OCC_MAX if TR_OCC[ti.usize()] == 1 else LOST_MAX
-        if TR_LOST[ti.usize()] > budget:
-            emit_event(TR_ID[ti.usize()], "VANISH", t, TR_CX[ti.usize()], TR_CY[ti.usize()], 70)
-            TR_ALIVE[ti.usize()] <- 0
+        # A UI-classified region has no object identity: it is not OCCLUDED and does not VANISH — it ends
+        # silently (the OBSERVED changed-regions remain; only the fabricated object-permanence claim is
+        # withheld). This is the harm-free identity-churn reduction (only fires on TR_UIF tracks).
+        if TR_UIF[ti.usize()] == 1:
+            TR_LOST[ti.usize()] <- TR_LOST[ti.usize()] + 1
+            if TR_LOST[ti.usize()] > LOST_MAX:
+                TR_ALIVE[ti.usize()] <- 0
+            else:
+                TR_STATE[ti.usize()] <- 1
+                TR_CX[ti.usize()] <- TR_CX[ti.usize()] + TR_VX[ti.usize()]
+                TR_CY[ti.usize()] <- TR_CY[ti.usize()] + TR_VY[ti.usize()]
         else:
-            TR_STATE[ti.usize()] <- 1
-            TR_CX[ti.usize()] <- TR_CX[ti.usize()] + TR_VX[ti.usize()]      # coast on prediction
-            TR_CY[ti.usize()] <- TR_CY[ti.usize()] + TR_VY[ti.usize()]
+            if TR_OCC[ti.usize()] == 0 and occluder_overlap(ti):
+                TR_OCC[ti.usize()] <- 1
+                emit_event(TR_ID[ti.usize()], "OCCLUDED", t, TR_CX[ti.usize()], TR_CY[ti.usize()], 55)
+            TR_LOST[ti.usize()] <- TR_LOST[ti.usize()] + 1
+            budget: i32 = OCC_MAX if TR_OCC[ti.usize()] == 1 else LOST_MAX
+            if TR_LOST[ti.usize()] > budget:
+                emit_event(TR_ID[ti.usize()], "VANISH", t, TR_CX[ti.usize()], TR_CY[ti.usize()], 70)
+                TR_ALIVE[ti.usize()] <- 0
+            else:
+                TR_STATE[ti.usize()] <- 1
+                TR_CX[ti.usize()] <- TR_CX[ti.usize()] + TR_VX[ti.usize()]      # coast on prediction
+                TR_CY[ti.usize()] <- TR_CY[ti.usize()] + TR_VY[ti.usize()]
     # unmatched components: births
     for cj in 0..<ncomp:
         new_track(cj, t) if CM_USED[cj.usize()] == 0
@@ -440,10 +576,25 @@ def associate(ncomp: i32, t: i64) -> void:
         ob_byte(10)
         ob_flush()
 
+# V3.0 scene classification (applicability leg input): a "bar" spans >= BAR_WPCT% of the grid width
+# (static full-frame chrome — toolbar/taskbar); everything else is a "mover". A chrome-dominated frame
+# (>= 1 bar and <= 1 mover) is the pharo UI-pointer signature. Sets the g_chrome flag the gate reads.
+def classify_scene(ncomp: i32) -> void:
+    nbar: mutable i32 = 0
+    nmover: mutable i32 = 0
+    for cj in 0..<ncomp:
+        w: i32 = CM_MAXX[cj.usize()] - CM_MINX[cj.usize()] + 1
+        if w * 100 >= BAR_WPCT * g_dw:
+            nbar <- nbar + 1
+        else:
+            nmover <- nmover + 1
+    g_chrome <- nbar >= 1 and nmover <= 1
+
 # ---- per-frame + per-batch drivers ----
 def process_frame(t: i64) -> void:
     bg: u8 = background_cell(g_dw, g_dh)
     ncomp: i32 = label_components(g_dw, g_dh, bg)
+    classify_scene(ncomp)
     ob_str("OBS frame t=")
     ob_dec(t)
     ob_str(" ncomp=")

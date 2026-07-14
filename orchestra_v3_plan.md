@@ -378,6 +378,33 @@ per scene region by measured trackability, never granted globally.
   text is false by construction), track birth/death churn rate, abstention (`UNTRACKABLE`) rate,
   and OCR/triage evidence retained despite tracker abstention. Full "fraction correctly
   classified as UI activity" waits for the V3.6 ladder where gold-authoring is scheduled.
+- **Implemented design (2026-07-14, `tracker.elisa`).** The gate sits at the physical-motion claim
+  site (`update_dir`'s REVERSE emission) and is fed by cheap per-track accumulators + a per-frame scene
+  classification. The concrete pharo baseline (`/tmp/fix_pharo`, 60s) has 5 false REVERSEs in two
+  shapes: **id=15 ×4** (cursor — tiny, |vx| up to 64, sole mover over 2 full-width bars, ncomp=3) and
+  **id=57 ×1** (a near-static track, vx=0 for ~100 frames, that twitched in a busier ncomp=7 frame).
+  Four orthogonal legs, each keyed to the census signature that isolates its sub-mode:
+    - **Leg A — applicability (UI pointer).** Per frame, classify components: a `bar` spans ≥85% of
+      grid width (static full-frame chrome); everything else is a `mover`. A frame is *chrome-dominated*
+      when it has ≥1 bar and ≤1 mover. A track that is TINY (`area < AREA_TINY_SC=30`) and spent the
+      majority of its matched life in chrome-dominated frames is a UI pointer — its REVERSE is
+      suppressed, `INF activity ... activity_type=UI_CHANGE trackability=LOW reason=ui-pointer` emitted
+      once. Catches id=15 on what-kind-of-thing-it-is, exactly as the t=14 inspection concluded.
+      (sub-mode A / pharo, soleSmallMover.)
+    - **Leg B — bounded velocity.** REVERSE suppressed when `|vx| ≥ VX_IMPL=35` (census `VX_IMPLAUSIBLE`)
+      — a "reversal" of a component crossing >18% of the frame in one 100ms step is a smear artifact.
+      (sub-mode C / boxing, cs2 — revHiVx.)
+    - **Leg C — motion persistence.** A REVERSE is a direction change of a *moving* object; a static one
+      has no direction to reverse. Suppressed when the track's mean speed over life is `< 1` cell/frame
+      (`TR_SPD < TR_LIFE`, guarded to `TR_LIFE ≥ 8`). Catches id=57. reason=static-furniture.
+    - **Do-no-harm (D).** go has 0 REVERSEs (nothing to suppress); a real mover (lsl1 sprite, PoP
+      protagonist) is not tiny-chrome, is below the velocity ceiling, and has mean speed ≥ 1, so it
+      passes every leg. Verified by re-running the census: D untouched (see acceptance).
+  - **Confidence split (3 fields, replacing the blended `conf=85`).** Every `INF event` now also carries
+    `dq=` (detection_quality: low for tiny/unstable components), `am=` (association_margin: 2nd-best −
+    best gate distance, `-1` = n/a for births, large = unambiguous), `ec=` (event_confidence = the old
+    per-event conf). `conf=` is retained for ledger.py compatibility. This lets a claim say "detection
+    certain, association meaningless" — impossible with one scalar. V3.5 completes the decomposition.
 
 ### V3.1 Velocity/direction freeze during OCCLUDED (smallest diff first)
 
@@ -486,9 +513,16 @@ per scene region by measured trackability, never granted globally.
 
 ### V3.7 Acceptance
 
-- [ ] V3.0 gate on pharo (annotation-free): false-REVERSE count = 0 in OCR-static intervals;
+- [x] V3.0 gate on pharo (annotation-free): false-REVERSE count = 0 in OCR-static intervals;
       motion-claim count and churn rate reduced vs the 2026-07-13 baseline; `UNTRACKABLE`
       abstention emitted; OCR/triage evidence unaffected by tracker abstention.
+      **DONE 2026-07-14** (`eval/scenarios/real/v30_gate_acceptance.md`): pharo false-REVERSE 5→0,
+      revHiVx 3→0, motion-claim 5→0, churn 1.9→1.8, VANISH 51→46, 2 UNTRACKABLE verdicts, OBS
+      frame/comp evidence unchanged (593/2826). Do-no-harm verified on the full 8-video census: go &
+      lsl1 byte-identical, all track counts/churn preserved; boxing revHiVx 26→11, cs2 18→8, police RE
+      12→6, PoP 13→8. Synthetic `track_test` 100%, `seed_test` 219/220 (== baseline, no regression).
+      Association-margin leg surfaced as `am=`; hard-gating deferred to V3.2 candidate sets (hard-gating
+      REACQUIRE was tried and rejected — it converts a reacquire into death+rebirth, raising churn).
 - [ ] Seeded occlude-reverse: direction-after-reacquire ≥ 95% on dev seeds, then held-out seeds.
 - [ ] scroll-plus-motion: both motions separated on dev + held-out seeds.
 - [ ] merge-drag trap (the v2 documented failure): candidate sets prevent the silent identity
