@@ -110,3 +110,21 @@ no-component gap" — not a flat 2, and no permanence claim is fabricated. Accep
 
 This is the schema V3.2's tentative reacquisition writes into; it lands BEFORE the tracker produces
 revisable interpretations, per the plan's ordering.
+
+### Regression: no prior probe lost (V2.4 final box, 2026-07-14)
+
+A rung-B-vs-B+ projection diff on `motion-trap` seed 0 (build `--no-supersede` vs default) confirms
+supersession only ADDS capability — no run-1/run-2 probe regressed:
+
+| probe | gold | rung B | rung B+ | verdict |
+|---|---|---|---|---|
+| `pt_reverse` | middle | REVERSE @cx=109 | byte-identical | unchanged ✓ |
+| `pt_vanish` | yes | explicit VANISH | reacquire-candidate w/ `no-component gap 800ms` pin (+ `--audit` keeps the literal VANISH) | still "yes" ✓ |
+| `pt_continuous` | no | gap present | gap present | unchanged ✓ |
+| `pt_count` | 1 | flat "2" | candidate split reaching "1 if same" | **improved** ✓ |
+
+The clean projection reframes VANISH → REACQUIRE_CANDIDATE (o1 may be occluded then reacquired), but
+occlusion still means "gone from view", so the disappearance probes resolve unchanged; the audit trail
+preserves the retired VANISH verbatim. Run-2 retention facts (error 47, alarm 880 Hz, o1 first corner,
+"12 files") live in APPEAR/OCR/audio records that supersession never touches. `v2_supersession_test.sh`
+PASS on seeds 0/3/7; `score_memory.py --selftest` PASS. **V2 is complete.**

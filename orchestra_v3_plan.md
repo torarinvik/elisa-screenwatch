@@ -308,9 +308,16 @@ INFERRED  track-17 OCCLUDED, reacquired as track-19 (candidates {17-continues, n
       superseding the VANISH with the {1-if-same, 2-if-new} split; `revision o1` recovers the retired
       belief; overhead ~655 bytes (rung B 1350 → B+ 2004). Recorded in `eval/bakeoff.md` (Rung B+).
       (expected: small; if > ~20% revisit the field encoding).
-- [ ] All prior bake-off probes still pass (no regression).
+- [x] All prior bake-off probes still pass (no regression). **DONE 2026-07-14** — rung-B-vs-B+
+      projection diff on motion-trap (seed 0): `pt_reverse` byte-identical (REVERSE cx=109 untouched);
+      `pt_vanish` still "yes" (the reacquire-candidate's evidence pin carries `no-component gap 800ms`
+      and `--audit` preserves the literal VANISH); `pt_continuous` still "no" (the gap breaks
+      continuity in both rungs); `pt_count` IMPROVED "2"→candidate-split-reaching-"1" (the fix, not a
+      regression). Run-2 retention facts untouched (supersession reframes only viola VANISH, never the
+      APPEAR/OCR/audio records those facts live in). `v2_supersession_test.sh` PASS seeds 0/3/7;
+      `score_memory.py --selftest` PASS.
 
-**Estimated size:** 1 day.
+**Estimated size:** 1 day. **V2 COMPLETE.**
 
 ---
 
