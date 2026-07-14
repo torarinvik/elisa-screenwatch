@@ -346,6 +346,14 @@ per scene region by measured trackability, never granted globally.
   `association_margin`, `event_confidence`. V3.5 keeps the full decomposition + calibration.
 - Pre-work (do during V1, it is evidence-gathering not repair): inspect the pharo t=14.2–16.1s
   window (batch 7–8 keyframes) and classify what UI event flung track 15 between cx=17/140/25/114.
+  **DONE 2026-07-14** (`eval/scenarios/real/pharo/t14_inspection.md` + cursor figure): track 15 is
+  the **mouse cursor** — the only non-static component (the other two are the full-width toolbar and
+  taskbar) — moved in a loop across the empty workspace; the conf=85 REVERSEs are the pointer turning
+  at the loop extremes. Sharpens the gate design: this is NOT the association-churn sub-mode — it is a
+  textbook-CLEAN track (persistent, stable tiny area, association margin ≈ ∞) of the WRONG KIND of
+  object. Acceleration bounds catch the |vx|=64 flicks but NOT the gentle turn at the REVERSE; that
+  needs an **applicability** disqualifier (scene-relative area floor / "sole tiny mover over static
+  full-frame chrome ⇒ UI pointer"). V3.0 must reject track 15 on what-kind-of-thing-it-is, not motion.
 - Acceptance is annotation-free on pharo (no gold pulled forward from §7): count of
   physical-motion claims, false-REVERSE count (a REVERSE inside an interval OCR shows as static
   text is false by construction), track birth/death churn rate, abstention (`UNTRACKABLE`) rate,
