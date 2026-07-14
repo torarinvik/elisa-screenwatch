@@ -341,6 +341,14 @@ per scene region by measured trackability, never granted globally.
   margin (best candidate clearly separated from alternatives), and scene-wide birth/death churn
   below a threshold. Bass's ACTIVITY stats already carry most of the scene-level signal — this
   is largely a viola-side read of evidence the orchestra already produces.
+- **Multi-video generalization evidence (DONE 2026-07-14, `eval/scenarios/real/restraint_census.md`,
+  8 videos across tiers):** the gate must be MULTI-LEG, not pharo-shaped. Four measured sub-modes —
+  **A** UI pointer (pharo, soleSmallMover 89%) → applicability leg; **B** association churn (PoP/
+  police/fencing: many tracks, high OCCLUDED/REACQUIRE, moderate velocity) → association-margin + churn
+  leg; **C** implausible-velocity smear (boxing/cs2: peak |vx| 103–164, high revHiVx) → bounded-velocity
+  leg; **D** already-calm (go/lsl1: near-zero fabricated events) → the **do-no-harm control** the gate
+  must not degrade. A pharo-only gate addresses only A and risks harming D. Design each leg against the
+  signature that isolates its sub-mode; accept only when D is untouched.
 - When the gate fails, the honest output is restraint, not a worse track:
   `OBSERVED changed-regions ...` + `INFERRED activity_type=UI_CHANGE trackability=LOW` —
   and NO object identity or REVERSE claim is admitted. `UNTRACKABLE` is a first-class verdict.
