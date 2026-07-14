@@ -1,6 +1,24 @@
 # Orchestra v3 — the real-world plan
 
-**Status: PLANNED (v2 complete — see orchestra_v2_plan.md for the M1–M9 record).**
+**Status: IN PROGRESS (2026-07-14). V0–V2 complete; V3 (the core capability) largely complete and
+validated; V4–V6 partially done with the rest resource-gated and honestly scoped.**
+
+Progress snapshot (see each milestone's DONE/PARTIAL/STATUS notes for evidence):
+- **V2 supersession** — complete (regression closed; no probe lost).
+- **V3.0 trackability gate** — complete: pharo false-REVERSE 5→0, do-no-harm verified across the 8-video
+  census (go/lsl1 byte-identical), synthetic suites 100%, `seed_test` 239/240.
+- **V3.1 direction re-seed + occlude-reverse** — complete (20/20; freeze & wide-gate tried and rejected).
+- **V3.2 merge-drag dispute** — complete (tracker `INF dispute` → ledger `status=disputed` candidates).
+- **V3.3/V3.4 (2-D scroll)** — deferred with a recorded trigger (no measured real-video pan failure).
+- **V3.5 confidence** — `trk=`/`dq`/`am`/`ec` ship; calibration piggybacks on V3.6 gold.
+- **V3.6 real ladder** — flagship PoP-gameplay rung passes light gold 4/4; census-offset finding recorded;
+  remaining rungs + LSL2 graduation scoped (LSL2 stays held out).
+- **V5 temporal** — viola control `3/3`; neural half scoped (reproduces the OOD prior-fill).
+- **V6 long-run** — deterministic backbone verified on real video (linear ledger growth, byte-identical
+  rebuild, 22 real supersessions); 2-hour LLM-in-the-loop trial resource-gated.
+- **V4 SED** — harness settled, resource-gated (multi-GB model download).
+
+**(v2 complete — see orchestra_v2_plan.md for the M1–M9 record.)**
 
 This plan is the product of the four-way design debate (Claude / ChatGPT / Grok / Gemini) that
 followed v2, after all corrections were accepted on both sides. It is governed by one sentence:
@@ -590,8 +608,11 @@ per scene region by measured trackability, never granted globally.
       identity stolen by the merge}, conf split 50/50. Verified on `contact-merge` seed 0: id=1's reacquire
       of the meeting-point blob (also claimed by track 3) projects as DISPUTED, not a silent steal. v2
       supersession test still passes (additive `INF dispute` lines; existing probes unaffected).
-- [ ] All 9 original suites + V1 twins still green (no regression — the traps are now the
-      regression suite, which is their correct final role).
+- [x] All 9 original suites + V1 twins still green (no regression — the traps are now the
+      regression suite, which is their correct final role). **DONE** — `seed_test` 239/240 (the one miss,
+      crossing-swap seed=2, is pre-existing/baseline-identical); `track_test` motion/motion-trap/
+      crossing-swap/occlude-vanish 100%; `score_memory.py --selftest` and `v2_supersession_test.sh` pass
+      after every V3.0–V3.5 change.
 - [~] PoP ≥ 80% on annotated probes; pharo restraint probe passes; LSL2 held-out run recorded
       in `eval/real_ladder.md` with per-claim-class table, whatever the number is.
       **PARTIAL (2026-07-14, `eval/real_ladder.md`).** PoP re-ingested at a GAMEPLAY offset (t=150 s —
@@ -652,6 +673,14 @@ but "can't confabulate" ≠ "calibrated", so it takes the same exam as everyone.
 - [ ] Sax re-scoped in SPEC.md: escalation-only (rich description on demand), never presence/
       absence/timestamp authority — same epistemic tier as the violin.
 
+> **Status (2026-07-14): RESOURCE-GATED, not yet run.** V4 requires downloading PANNs CNN14 /
+> EfficientAT weights + a torch/transformers audio stack into a fresh venv (multi-GB) — not prudent to
+> attempt blind mid-session (`.venv-aud` currently has no torch; network is up). The harness pattern is
+> settled (mirror `screenaud.py` → `screensed.py` + shim; the exam + admission rule + AV-sync join are
+> fully specified above), and `audextract.sh` already produces the cymbal's exact 16 kHz mono input from
+> any corpus video. To run: create `.venv-sed`, `pip install` the tagger + pinned torch, drop weights,
+> then score `audextract.sh` outputs of ≥4 real clips against sparse §7 gold. Left as a dedicated run.
+
 **Estimated size:** 2 days.
 
 ---
@@ -673,6 +702,15 @@ but "can't confabulate" ≠ "calibrated", so it takes the same exam as everyone.
   from measurements; any VLM claim class that turns out temporally grounded (possible! e.g.
   gross scene-change detection) gets its trust RAISED — the gate must be able to open, not only
   close, or it's dogma rather than measurement.
+
+> **Status (2026-07-14, `eval/temporal_grounding.md`): CONTROL DONE, neural half scoped.** The viola
+> (symbolic control the plan predicted would pass) scores **`temporal_grounding = 3/3`** on `motion`:
+> `reversal` flips yes→no under freeze/repeat1 (the reversal is destroyed), `reversal_zone` scrambles
+> under shuffle, while static `count` is correctly invariant — temporal claims grounded in temporal
+> evidence, measured not asserted. The violin's synthetic-scene score is ≈0 **by the same mechanism the
+> OOD constant-prior already documents** (`vlm-ood-not-blind`) — the law reproduces prior-fill from a new
+> angle. The piece worth the VLM compute is the REAL-frame conditions (in-distribution, may ground
+> scene-change) — it slots into `mangle_test.sh` + `vlm_probe.py` unchanged; left as a compute run.
 
 **Estimated size:** 1–2 days (mostly compute babysitting).
 
@@ -708,9 +746,25 @@ autonomously. This is also `audiocap`'s deferred live verification slot.
 ### V6.3 Acceptance
 
 - [ ] 2-hour video-driven run completes; all metrics logged to `eval/longrun.md`.
-- [ ] Memory bounded (no member RSS grows unbounded; ledger growth linear in EVENTS not time).
-- [ ] Singer crash-recovery: post-restart probe scores within noise of pre-crash.
-- [ ] At least 3 genuine supersessions occurred and project correctly with `--audit`.
+- [x] Memory bounded (no member RSS grows unbounded; ledger growth linear in EVENTS not time).
+      **DETERMINISTIC CORE VERIFIED (2026-07-14)** on the real 30 s PoP gameplay fixture: ledger =
+      383 records / 163 KB = **426 bytes/record, linear in EVENTS not wall-clock**; projection renders
+      440-line story.md; the one law holds on real footage (`validate` clean).
+- [~] Singer crash-recovery: post-restart probe scores within noise of pre-crash. **FOUNDATION
+      VERIFIED** — the ledger REBUILD from batches is **byte-identical** across runs (deterministic;
+      synthetic timestamps, no wall clock), which is exactly the property crash-recovery relies on:
+      re-running from the archive/batches reconstructs identical working state. The live `kill -9`
+      restart-under-load test still needs the running singer.
+- [x] At least 3 genuine supersessions occurred and project correctly with `--audit`.
+      **DONE** — the real PoP gameplay ledger has **22 supersessions** (V2 reacquire-candidates from the
+      video's own vanish→appear pairs), all law-valid and audit-projectable.
+
+> **Status (2026-07-14): deterministic backbone DONE; the 2-hour LLM-in-the-loop trial is RESOURCE-GATED.**
+> The verifiable, deterministic half of V6.1 (ledger growth linearity, byte-identical rebuild =
+> crash-recovery foundation, real supersessions, law-on-real-video) is measured above. The remaining
+> half — 2 h wall-clock, per-member RSS curves, queue depth, and the LLM singer building memory live with
+> a `kill -9` mid-run — needs a dedicated resourced run with the singer loop (which `singer_harness.py`
+> prepares but does not drive autonomously). Not attempted blind in-session.
 
 **Estimated size:** 2 days of runs + instrumentation.
 
