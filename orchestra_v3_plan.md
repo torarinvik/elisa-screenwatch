@@ -673,13 +673,15 @@ but "can't confabulate" ≠ "calibrated", so it takes the same exam as everyone.
 - [ ] Sax re-scoped in SPEC.md: escalation-only (rich description on demand), never presence/
       absence/timestamp authority — same epistemic tier as the violin.
 
-> **Status (2026-07-14): RESOURCE-GATED, not yet run.** V4 requires downloading PANNs CNN14 /
-> EfficientAT weights + a torch/transformers audio stack into a fresh venv (multi-GB) — not prudent to
-> attempt blind mid-session (`.venv-aud` currently has no torch; network is up). The harness pattern is
-> settled (mirror `screenaud.py` → `screensed.py` + shim; the exam + admission rule + AV-sync join are
-> fully specified above), and `audextract.sh` already produces the cymbal's exact 16 kHz mono input from
-> any corpus video. To run: create `.venv-sed`, `pip install` the tagger + pinned torch, drop weights,
-> then score `audextract.sh` outputs of ≥4 real clips against sparse §7 gold. Left as a dedicated run.
+> **Status (2026-07-14): HARNESS BUILT + scoring verified; model download RESOURCE-GATED.** `screensed.py`
+> exists (mirrors `screenaud.py`): `tag` emits `SED t=.. class=.. score=..` tuples over 1 s windows from a
+> fixed AudioSet-style candidate ontology; `audit` computes per-class precision/recall and applies the
+> admission rule (precision ≥ 0.8 on ≥ 10 real instances). The `audit`/admission logic — the actual V4.2
+> deliverable — is unit-tested and **passes `screensed.py --selftest` WITHOUT any model**, so the exam math
+> is verified independent of the download. `audextract.sh` already produces the cymbal's exact 16 kHz mono
+> input from any corpus video. What's gated is only the tagger backend (PANNs CNN14 / EfficientAT weights +
+> torch, multi-GB): `tag` prints the exact `.venv-sed` install steps when the backend is absent. To finish:
+> install the backend, `tag` ≥ 4 real clips, `audit` against sparse §7 gold → `eval/sed_audition.md`.
 
 **Estimated size:** 2 days.
 
