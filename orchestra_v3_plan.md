@@ -592,8 +592,15 @@ per scene region by measured trackability, never granted globally.
       supersession test still passes (additive `INF dispute` lines; existing probes unaffected).
 - [ ] All 9 original suites + V1 twins still green (no regression — the traps are now the
       regression suite, which is their correct final role).
-- [ ] PoP ≥ 80% on annotated probes; pharo restraint probe passes; LSL2 held-out run recorded
+- [~] PoP ≥ 80% on annotated probes; pharo restraint probe passes; LSL2 held-out run recorded
       in `eval/real_ladder.md` with per-claim-class table, whatever the number is.
+      **PARTIAL (2026-07-14, `eval/real_ladder.md`).** PoP re-ingested at a GAMEPLAY offset (t=150 s —
+      the census clip was the intro): light gold passes 4/4 (present, room-1 direction=right = prince
+      id=15, fabricated-REVERSE=0, velocity in bounds); the gate is restrained on real gameplay (RE=0,
+      revHiVx=0, 80 merge disputes flagged not stolen). pharo restraint probe passes (v30 doc). Key
+      finding: census fixtures landed on phenomenon-poor offsets (PoP intro, Go pause), so full
+      per-claim-class gold + Police/Go/fencing rungs + LSL2 graduation need per-video re-ingest at
+      phenomenon-rich offsets + §7 annotation — scheduled, not skipped; LSL2 remains held out.
 
 **Estimated size:** 4–6 days. The biggest milestone; V3.1→V3.5 are separately committable.
 

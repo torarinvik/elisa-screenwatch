@@ -66,6 +66,14 @@ three, matched to three measurable signatures, plus a control class the gate mus
 - go's calm may partly reflect a static commentary layout, not tracker virtue alone — still a valid
   do-no-harm control either way.
 
+## Offset caveat (found during V3.6, 2026-07-14)
+
+Two of these clips landed on phenomenon-poor offsets: the **PoP** clip is the game INTRO (loading +
+title card — so "PoP 107 tracks" was an animated title screen, not a protagonist) and the **Go** clip is
+a thinking PAUSE (no stones placed). This does NOT invalidate the sub-mode taxonomy — a busy title screen
+is still valid association-churn (B), and a static board is still a do-no-harm case — but these clips are
+NOT gold-able for a tracker ladder. The V3.6 rung re-ingests at gameplay offsets (see `real_ladder.md`).
+
 ## After — the V3.0 gate built on this evidence (2026-07-14)
 
 The multi-leg gate designed from these 4 sub-modes was implemented and re-censused; full before/after in
